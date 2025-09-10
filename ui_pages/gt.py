@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import time
 from datetime import datetime
+import plotly.graph_objects as go
 from core.data_manager import data_manager
 from core.io_yolo import (
     process_label_upload, 
@@ -228,18 +229,28 @@ def render_gt_page():
         if not df_counts.empty:
             df_counts = df_counts.sort_values('Count', ascending=False)
             
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                st.bar_chart(df_counts.set_index('Character')['Count'])
-            
-            with col2:
-                st.dataframe(
-                    df_counts,
-                    use_container_width=True,
-                    hide_index=True,
-                    height=400
+            # Create plotly bar chart with better control over x-axis labels
+            fig = go.Figure(data=[
+                go.Bar(
+                    x=df_counts['Character'],
+                    y=df_counts['Count'],
+                    text=df_counts['Count'],
+                    textposition='outside',
                 )
+            ])
+            
+            fig.update_layout(
+                xaxis_title="Character",
+                yaxis_title="Count",
+                showlegend=False,
+                height=400,
+                xaxis=dict(
+                    tickangle=0,  # Keep labels horizontal
+                    tickmode='linear'
+                )
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
         
         with st.expander("🔍 Sample Preview (First 5 plates)"):
             sample_items = list(labels.items())[:5]
