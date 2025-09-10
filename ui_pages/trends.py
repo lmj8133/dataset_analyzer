@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+from plotly.subplots import make_subplots
 from core.metrics import compute_delta_counts
 from core.io_yolo import CLS_MAP
 
@@ -177,58 +178,236 @@ def render_overall_trends(runs):
 
 def render_per_class_trends(runs):
     """Render per-class accuracy trends."""
-    st.subheader("Per-Class Character Accuracy Trends")
+    st.subheader("Per-Class Character Accuracy Analysis")
     
-    all_chars = list(CLS_MAP.values())
+    if len(runs) == 0:
+        st.info("No runs available for analysis")
+        return
     
-    col1, col2 = st.columns([2, 1])
+    # Select run for detailed view
+    selected_run_idx = st.selectbox(
+        "Select run for detailed analysis",
+        options=list(range(len(runs))),
+        format_func=lambda x: runs[x]['name'],
+        index=len(runs)-1 if runs else 0,
+        help="Choose a training run to view its per-class accuracy and training data distribution"
+    )
     
-    with col2:
-        st.markdown("**Select Characters**")
-        selected_chars = st.multiselect(
-            "Choose up to 5 characters",
-            options=all_chars,
-            default=['A', 'B', '1', '2', '3'],
-            max_selections=5,
-            help="Select characters to display in the line chart"
+    if selected_run_idx is None:
+        return
+    
+    selected_run = runs[selected_run_idx]
+    prev_run = runs[selected_run_idx - 1] if selected_run_idx > 0 else None
+    
+    # Prepare data for 37 classes (plates + 36 characters)
+    class_labels = ['Plates'] + [CLS_MAP[i] for i in range(36)]
+    
+    # Calculate previous counts (for stacked bar chart)
+    prev_counts = prev_run['train_counts'] if prev_run else {}
+    curr_counts = selected_run['train_counts']
+    
+    # Prepare data arrays
+    base_counts = []  # Previous training counts
+    delta_counts = []  # New additions
+    accuracies = []   # Accuracy values
+    prev_accuracies = []  # Previous accuracy values for comparison
+    accuracy_colors = []  # Colors for K-line style
+    hover_texts = []  # Custom hover text
+    
+    # Handle plates data
+    n_plates = selected_run['metrics'].get('n_plates', 0)
+    prev_plates = prev_run['metrics'].get('n_plates', 0) if prev_run else 0
+    base_counts.append(prev_plates)
+    delta_counts.append(n_plates - prev_plates)
+    
+    curr_plate_acc = selected_run['metrics']['plate_accuracy'] * 100
+    prev_plate_acc = prev_run['metrics']['plate_accuracy'] * 100 if prev_run else curr_plate_acc
+    accuracies.append(curr_plate_acc)
+    prev_accuracies.append(prev_plate_acc)
+    
+    # Determine color and hover text based on change
+    if not prev_run:
+        # First run - always gray
+        accuracy_colors.append('#888888')
+        hover_text = f"Plates<br>Baseline: {curr_plate_acc:.1f}%<br>(Initial run)"
+    elif curr_plate_acc > prev_plate_acc:
+        accuracy_colors.append('#FF4444')  # Red for increase
+        change = f"+{curr_plate_acc - prev_plate_acc:.1f}%"
+        hover_text = f"Plates<br>Current: {curr_plate_acc:.1f}%<br>Previous: {prev_plate_acc:.1f}%<br>Change: {change}"
+    elif curr_plate_acc < prev_plate_acc:
+        accuracy_colors.append('#44AA44')  # Green for decrease
+        change = f"{curr_plate_acc - prev_plate_acc:.1f}%"
+        hover_text = f"Plates<br>Current: {curr_plate_acc:.1f}%<br>Previous: {prev_plate_acc:.1f}%<br>Change: {change}"
+    else:
+        accuracy_colors.append('#888888')  # Gray for no change
+        hover_text = f"Plates<br>Current: {curr_plate_acc:.1f}%<br>Previous: {prev_plate_acc:.1f}%<br>No change"
+    
+    hover_texts.append(hover_text)
+    
+    # Handle character data
+    per_class_acc = selected_run['metrics']['per_class_accuracy']
+    prev_per_class_acc = prev_run['metrics']['per_class_accuracy'] if prev_run else {}
+    
+    for i in range(36):
+        char = CLS_MAP[i]
+        
+        # Get counts
+        prev_count = prev_counts.get(i, prev_counts.get(str(i), 0)) if prev_counts else 0
+        curr_count = curr_counts.get(i, curr_counts.get(str(i), 0))
+        
+        base_counts.append(prev_count)
+        delta_counts.append(curr_count - prev_count)
+        
+        # Get accuracy
+        curr_acc = per_class_acc[char]['accuracy'] * 100 if char in per_class_acc else 0
+        
+        # Handle previous accuracy based on whether prev_run exists
+        if prev_run:
+            # If there's a previous run, try to get the previous accuracy
+            prev_acc = prev_per_class_acc[char]['accuracy'] * 100 if char in prev_per_class_acc else 0
+        else:
+            # For the first run, start point equals end point
+            prev_acc = curr_acc
+        
+        accuracies.append(curr_acc)
+        prev_accuracies.append(prev_acc)
+        
+        # Determine color based on change
+        if not prev_run:
+            # First run - always gray
+            accuracy_colors.append('#888888')
+            hover_text = f"{char}<br>Baseline: {curr_acc:.1f}%<br>(Initial run)"
+        elif curr_acc > prev_acc:
+            accuracy_colors.append('#FF4444')  # Red for increase
+            change = f"+{curr_acc - prev_acc:.1f}%"
+            hover_text = f"{char}<br>Current: {curr_acc:.1f}%<br>Previous: {prev_acc:.1f}%<br>Change: {change}"
+        elif curr_acc < prev_acc:
+            accuracy_colors.append('#44AA44')  # Green for decrease
+            change = f"{curr_acc - prev_acc:.1f}%"
+            hover_text = f"{char}<br>Current: {curr_acc:.1f}%<br>Previous: {prev_acc:.1f}%<br>Change: {change}"
+        else:
+            accuracy_colors.append('#888888')  # Gray for no change
+            hover_text = f"{char}<br>Current: {curr_acc:.1f}%<br>Previous: {prev_acc:.1f}%<br>No change"
+        
+        hover_texts.append(hover_text)
+    
+    # Round all accuracy values to avoid floating point issues
+    # This ensures proper color display in candlestick chart
+    accuracies = [round(acc, 1) for acc in accuracies]
+    prev_accuracies = [round(acc, 1) for acc in prev_accuracies]
+    
+    # Ensure truly equal values for neutral cases
+    # After rounding, values within 0.1% are considered equal
+    adjusted_prev_accuracies = []
+    for i in range(len(prev_accuracies)):
+        if abs(prev_accuracies[i] - accuracies[i]) < 0.1:  # Less than 0.1% difference
+            adjusted_prev_accuracies.append(accuracies[i])  # Make them exactly equal
+        else:
+            adjusted_prev_accuracies.append(prev_accuracies[i])
+    
+    # Create dual-axis plot
+    fig = make_subplots(
+        rows=1, cols=1,
+        specs=[[{"secondary_y": True}]]
+    )
+    
+    # Add stacked bar chart for counts
+    # Base layer (previous counts)
+    fig.add_trace(
+        go.Bar(
+            x=class_labels,
+            y=base_counts,
+            name='Previous Training Count',
+            marker_color='darkblue',
+            hovertemplate='Previous: %{y:,.0f}<extra></extra>',
+            yaxis='y'
+        ),
+        secondary_y=False
+    )
+    
+    # Delta layer (new additions)
+    fig.add_trace(
+        go.Bar(
+            x=class_labels,
+            y=delta_counts,
+            name='New Additions',
+            marker_color='lightblue',
+            hovertemplate='Added: %{y:,.0f}<extra></extra>',
+            yaxis='y'
+        ),
+        secondary_y=False
+    )
+    
+    # Add Candlestick chart for accuracy (K-line style)
+    # Simple and clean implementation
+    fig.add_trace(
+        go.Candlestick(
+            x=class_labels,
+            open=adjusted_prev_accuracies,
+            close=accuracies,
+            high=[max(p, c) for p, c in zip(adjusted_prev_accuracies, accuracies)],
+            low=[min(p, c) for p, c in zip(adjusted_prev_accuracies, accuracies)],
+            increasing_line_color='#FF4444',  # Red for increase
+            decreasing_line_color='#44AA44',  # Green for decrease
+            name='Accuracy (K-line)',
+            text=hover_texts,
+            hoverinfo='text',
+            yaxis='y2'
+        ),
+        secondary_y=True
+    )
+    
+    # Update layout
+    fig.update_layout(
+        title=f"Per-Class Analysis for {selected_run['name']}",
+        barmode='stack',
+        hovermode='x unified',
+        height=600,
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
         )
+    )
+    
+    # Update axes
+    fig.update_xaxes(title_text="Class", tickangle=-45)
+    fig.update_yaxes(title_text="Training Sample Count", secondary_y=False)
+    fig.update_yaxes(title_text="Accuracy (%)", secondary_y=True, range=[0, 105])
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Display summary metrics
+    col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
-        if selected_chars:
-            fig = go.Figure()
-            
-            x_labels = [run['name'] for run in runs]
-            
-            for char in selected_chars:
-                y_values = []
-                for run in runs:
-                    per_class = run['metrics']['per_class_accuracy']
-                    if char in per_class:
-                        y_values.append(per_class[char]['accuracy'] * 100)
-                    else:
-                        y_values.append(0)
-                
-                fig.add_trace(go.Scatter(
-                    x=x_labels,
-                    y=y_values,
-                    mode='lines+markers',
-                    name=f'Char: {char}',
-                    marker=dict(size=8)
-                ))
-            
-            fig.update_layout(
-                title="Per-Class Accuracy Trends",
-                xaxis_title="Run Name",
-                yaxis_title="Accuracy (%)",
-                yaxis=dict(range=[0, 105]),
-                hovermode='x unified',
-                height=400
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
+        total_samples = sum(base_counts) + sum(delta_counts)
+        st.metric("Total Training Samples", f"{total_samples:,}")
+    
+    with col2:
+        total_new = sum(delta_counts)
+        st.metric("New Additions", f"{total_new:,}")
+    
+    with col3:
+        # Count accuracy changes
+        improved = sum(1 for curr, prev in zip(accuracies, prev_accuracies) if curr > prev)
+        st.metric("Classes Improved", improved, delta=f"↑ {improved}", delta_color="normal")
+    
+    with col4:
+        declined = sum(1 for curr, prev in zip(accuracies, prev_accuracies) if curr < prev)
+        st.metric("Classes Declined", declined, delta=f"↓ {declined}", delta_color="inverse")
+    
+    with col5:
+        perfect_classes = sum(1 for acc in accuracies if acc >= 95)
+        st.metric("Classes ≥95%", perfect_classes)
     
     st.divider()
-    st.subheader("Per-Class Accuracy Heatmap")
+    st.subheader("Character Accuracy Heatmap (All Runs)")
+    
+    all_chars = list(CLS_MAP.values())
     
     heatmap_data = []
     for char in all_chars:
