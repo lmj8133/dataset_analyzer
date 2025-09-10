@@ -54,8 +54,36 @@ def render_overall_trends(runs):
         x_labels = [run['name'] for run in runs]
         x_times = [run['timestamp'].strftime('%Y-%m-%d %H:%M') for run in runs]
         
+        # Calculate deltas for plates and characters
+        plates_deltas = []
+        chars_deltas = []
+        
+        for i, run in enumerate(runs):
+            n_images = run['metrics'].get('n_images', 0)
+            total_chars = run['metrics'].get('total_gt_chars', 0)
+            
+            if i == 0:
+                plates_deltas.append((n_images, None))
+                chars_deltas.append((total_chars, None))
+            else:
+                prev_images = runs[i-1]['metrics'].get('n_images', 0)
+                prev_chars = runs[i-1]['metrics'].get('total_gt_chars', 0)
+                plates_deltas.append((n_images, n_images - prev_images))
+                chars_deltas.append((total_chars, total_chars - prev_chars))
+        
         if show_emr:
             emr_values = [run['metrics']['emr'] * 100 for run in runs]
+            
+            # Build custom hover text with plate info
+            hover_texts = []
+            for i, emr in enumerate(emr_values):
+                plates_total, plates_delta = plates_deltas[i]
+                
+                hover_text = f'EMR: {emr:.2f}%<br>'
+                hover_text += f'車牌數: {plates_total:,}'
+                if plates_delta is not None:
+                    hover_text += f' ({plates_delta:+,})'
+                hover_texts.append(hover_text)
             
             fig.add_trace(go.Scatter(
                 x=x_labels,
@@ -64,13 +92,23 @@ def render_overall_trends(runs):
                 name='EMR',
                 line=dict(color='#2E86AB', width=3),
                 marker=dict(size=8),
-                hovertemplate='<b>%{x}</b><br>' +
-                             'EMR: %{y:.2f}%<br>' +
-                             '<extra></extra>'
+                hovertemplate='%{customdata}<extra></extra>',
+                customdata=hover_texts
             ))
         
         if show_char_acc:
             char_acc_values = [run['metrics']['char_accuracy'] * 100 for run in runs]
+            
+            # Build custom hover text with character info
+            hover_texts = []
+            for i, char_acc in enumerate(char_acc_values):
+                chars_total, chars_delta = chars_deltas[i]
+                
+                hover_text = f'Char Acc: {char_acc:.2f}%<br>'
+                hover_text += f'字元數: {chars_total:,}'
+                if chars_delta is not None:
+                    hover_text += f' ({chars_delta:+,})'
+                hover_texts.append(hover_text)
             
             fig.add_trace(go.Scatter(
                 x=x_labels,
@@ -79,9 +117,8 @@ def render_overall_trends(runs):
                 name='Character Accuracy',
                 line=dict(color='#A23B72', width=3),
                 marker=dict(size=8),
-                hovertemplate='<b>%{x}</b><br>' +
-                             'Char Acc: %{y:.2f}%<br>' +
-                             '<extra></extra>'
+                hovertemplate='%{customdata}<extra></extra>',
+                customdata=hover_texts
             ))
         
         for i, run in enumerate(runs):
