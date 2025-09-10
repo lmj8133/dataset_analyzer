@@ -1,0 +1,53 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv/
+.venv-wsl/
+venv/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+.tox/
+htmlcov/
+
+# Data persistence files
+data/
+*.json.gz
+
+# Development and test utility files
+test_persistence.py
+generate_test_data.py
+
+# Test data files
+test_*.zip
+test_labels/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Streamlit
+.streamlit/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
