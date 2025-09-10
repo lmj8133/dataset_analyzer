@@ -158,8 +158,39 @@ def render_add_run_page():
     
     if st.session_state.runs:
         st.divider()
-        st.subheader("📊 Run Summary")
         
+        # Run Summary header with edit button
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.subheader("📊 Run Summary")
+        with col2:
+            if 'edit_mode' not in st.session_state:
+                st.session_state.edit_mode = False
+            
+            if st.session_state.edit_mode:
+                if st.button("💾 Save & Exit Edit", type="primary", use_container_width=True):
+                    # Save edited descriptions
+                    if 'edited_descriptions' in st.session_state:
+                        for idx, desc in enumerate(st.session_state.edited_descriptions):
+                            st.session_state.runs[idx]['description'] = desc
+                        
+                        # Auto-save if enabled
+                        if st.session_state.get('auto_save_enabled', True):
+                            success, msg = data_manager.save_session(auto_save=True)
+                            if success:
+                                st.success("✅ Descriptions updated and saved")
+                        
+                        # Clear temporary storage
+                        del st.session_state.edited_descriptions
+                    
+                    st.session_state.edit_mode = False
+                    st.rerun()
+            else:
+                if st.button("✏️ Edit Descriptions", use_container_width=True):
+                    st.session_state.edit_mode = True
+                    st.rerun()
+        
+        # Prepare DataFrame
         df_runs = pd.DataFrame([
             {
                 'Run': run['name'],
@@ -169,16 +200,87 @@ def render_add_run_page():
                 'Images': run['metrics']['n_images'],
                 'Total Chars': run['metrics']['total_gt_chars'],
                 'Edit Dist': run['metrics']['total_edit_distance'],
-                'Description': run['description'][:50] + '...' if len(run['description']) > 50 else run['description']
+                'Description': run['description']  # Full description for editing
             }
             for run in st.session_state.runs
         ])
         
-        st.dataframe(
-            df_runs,
-            use_container_width=True,
-            hide_index=True
-        )
+        # Display table based on mode
+        if st.session_state.edit_mode:
+            # Edit mode: Use data_editor
+            edited_df = st.data_editor(
+                df_runs,
+                column_config={
+                    "Description": st.column_config.TextColumn(
+                        "Description",
+                        help="Edit descriptions here, then click Save & Exit Edit",
+                        width="large",
+                        max_chars=500
+                    )
+                },
+                disabled=["Run", "Time", "EMR", "Char Acc", "Images", "Total Chars", "Edit Dist"],
+                use_container_width=True,
+                hide_index=True,
+                key="runs_editor"
+            )
+            # Store edited descriptions temporarily
+            st.session_state.edited_descriptions = edited_df['Description'].tolist()
+        else:
+            # View mode: Clean columns layout with expandable descriptions
+            with st.container():
+                # Add subtle styling
+                st.markdown("""
+                    <style>
+                    .run-table { margin-top: 0.5rem; }
+                    .metric-value { font-weight: 600; }
+                    </style>
+                """, unsafe_allow_html=True)
+                
+                # Table header
+                header_cols = st.columns([2, 2, 0.8, 1, 0.8, 1, 1, 3.5])
+                headers = ["Run Name", "Time", "EMR", "Char Acc", "Images", "Chars", "Edit", "Description"]
+                for col, header in zip(header_cols, headers):
+                    col.markdown(f"**{header}**")
+                
+                st.markdown("---")
+                
+                # Data rows
+                for idx, run in enumerate(st.session_state.runs):
+                    cols = st.columns([2, 2, 0.8, 1, 0.8, 1, 1, 3.5])
+                    
+                    # Run name with code style for clarity
+                    cols[0].markdown(f"`{run['name']}`")
+                    
+                    # Time in compact format
+                    cols[1].caption(run['timestamp'].strftime('%m/%d %H:%M'))
+                    
+                    # Metrics without color coding
+                    cols[2].caption(f"{run['metrics']['emr']:.1%}")
+                    cols[3].caption(f"{run['metrics']['char_accuracy']:.1%}")
+                    
+                    # Simple numbers
+                    cols[4].caption(str(run['metrics']['n_images']))
+                    cols[5].caption(str(run['metrics']['total_gt_chars']))
+                    cols[6].caption(str(run['metrics']['total_edit_distance']))
+                    
+                    # Description with inline expander
+                    desc = run['description']
+                    if len(desc) > 40:
+                        with cols[7].expander(f"{desc[:40]}... 📄", expanded=False):
+                            st.text_area(
+                                "",
+                                value=desc,
+                                height=100,
+                                disabled=True,
+                                key=f"view_desc_{idx}",
+                                label_visibility="collapsed"
+                            )
+                    else:
+                        cols[7].caption(desc if desc else "—")
+                    
+                    # Subtle separator between rows
+                    if idx < len(st.session_state.runs) - 1:
+                        st.markdown("")  # Small spacing
         
         with st.expander("🗑️ Manage Runs"):
             st.warning("⚠️ Delete runs with caution")
