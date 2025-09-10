@@ -48,8 +48,8 @@ def levenshtein_with_alignment(s1: str, s2: str) -> Tuple[int, List[Tuple[int, i
     return int(dp[m][n]), alignment
 
 
-def compute_emr(gt_strings: List[str], pred_strings: List[str]) -> float:
-    """Compute Exact Match Rate."""
+def compute_plate_accuracy(gt_strings: List[str], pred_strings: List[str]) -> float:
+    """Compute Plate Accuracy (license plate recognition rate)."""
     if not gt_strings:
         return 0.0
     
@@ -165,16 +165,16 @@ def evaluate_run(
             gt_strings.append(gt_str)
             pred_strings.append(pred_str)
     
-    emr = compute_emr(gt_strings, pred_strings)
+    plate_accuracy = compute_plate_accuracy(gt_strings, pred_strings)
     char_acc, total_ed, total_chars = compute_char_accuracy(gt_strings, pred_strings)
     per_class_acc = compute_per_class_accuracy(gt_strings, pred_strings, cls_map)
     
     return {
-        'emr': emr,
+        'plate_accuracy': plate_accuracy,
         'char_accuracy': char_acc,
         'total_edit_distance': total_ed,
         'total_gt_chars': total_chars,
-        'n_images': len(gt_strings),
+        'n_plates': len(gt_strings),
         'per_class_accuracy': per_class_acc,
         'train_counts': train_counts
     }

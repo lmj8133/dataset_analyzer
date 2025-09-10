@@ -4,7 +4,7 @@ A minimal, fast dashboard for tracking license plate character recognition perfo
 
 ## Features
 
-- **String-based metrics**: EMR and character accuracy using Levenshtein distance (no IoU/confidence)
+- **String-based metrics**: Plate accuracy and character accuracy using Levenshtein distance (no IoU/confidence)
 - **In-memory storage**: All data kept in session state, no disk persistence
 - **Real-time trends**: Interactive charts showing recognition rate evolution
 - **Per-class analysis**: Track accuracy per character class
@@ -83,7 +83,7 @@ class_id x_center y_center width height
 ## Metrics
 
 ### String-Level Metrics
-- **EMR (Exact Match Rate)**: Percentage of perfectly matched license plates
+- **Plate Accuracy**: Percentage of perfectly matched license plates
 - **Character Accuracy**: 1 - (total edit distance / total GT characters)
 
 ### Character-Level Metrics

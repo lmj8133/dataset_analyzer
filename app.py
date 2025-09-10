@@ -147,7 +147,7 @@ def main():
         
         with col1:
             gt_count = len(st.session_state.gt_labels)
-            st.metric("GT Images", gt_count)
+            st.metric("GT Plates", gt_count)
         
         with col2:
             run_count = len(st.session_state.runs)
@@ -156,7 +156,7 @@ def main():
         if st.session_state.runs:
             latest_run = st.session_state.runs[-1]
             st.markdown(f"**Latest:** {latest_run['name']}")
-            st.caption(f"EMR: {latest_run['metrics']['emr']:.2%}")
+            st.caption(f"Plate Acc: {latest_run['metrics']['plate_accuracy']:.2%}")
             st.caption(f"Char Acc: {latest_run['metrics']['char_accuracy']:.2%}")
         
         st.divider()

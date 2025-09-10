@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import pytest
 from core.metrics import (
     levenshtein_with_alignment,
-    compute_emr,
+    compute_plate_accuracy,
     compute_char_accuracy,
     compute_per_class_accuracy,
     compute_delta_counts
@@ -43,20 +43,20 @@ def test_levenshtein_substitution():
     assert operations.count('match') == 2
 
 
-def test_compute_emr():
-    """Test Exact Match Rate calculation."""
+def test_compute_plate_accuracy():
+    """Test Plate Accuracy calculation."""
     gt_strings = ["ABC123", "XYZ789", "DEF456"]
     pred_strings = ["ABC123", "XYZ789", "DEF457"]
     
-    emr = compute_emr(gt_strings, pred_strings)
-    assert emr == pytest.approx(2/3)
+    plate_accuracy = compute_plate_accuracy(gt_strings, pred_strings)
+    assert plate_accuracy == pytest.approx(2/3)
     
     all_correct = ["ABC", "DEF", "GHI"]
-    emr_perfect = compute_emr(all_correct, all_correct)
-    assert emr_perfect == 1.0
+    plate_accuracy_perfect = compute_plate_accuracy(all_correct, all_correct)
+    assert plate_accuracy_perfect == 1.0
     
-    emr_empty = compute_emr([], [])
-    assert emr_empty == 0.0
+    plate_accuracy_empty = compute_plate_accuracy([], [])
+    assert plate_accuracy_empty == 0.0
 
 
 def test_compute_char_accuracy():
@@ -124,8 +124,8 @@ def test_compute_delta_counts():
 
 def test_edge_cases():
     """Test edge cases for metrics."""
-    empty_emr = compute_emr([], [])
-    assert empty_emr == 0.0
+    empty_plate_accuracy = compute_plate_accuracy([], [])
+    assert empty_plate_accuracy == 0.0
     
     single_char_acc, _, _ = compute_char_accuracy(["A"], ["B"])
     assert single_char_acc == 0.0

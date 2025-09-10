@@ -195,9 +195,9 @@ def render_add_run_page():
             {
                 'Run': run['name'],
                 'Time': run['timestamp'].strftime('%Y-%m-%d %H:%M'),
-                'EMR': f"{run['metrics']['emr']:.2%}",
+                'Plate Acc': f"{run['metrics']['plate_accuracy']:.2%}",
                 'Char Acc': f"{run['metrics']['char_accuracy']:.2%}",
-                'Images': run['metrics']['n_images'],
+                'Plates': run['metrics']['n_plates'],
                 'Total Chars': run['metrics']['total_gt_chars'],
                 'Edit Dist': run['metrics']['total_edit_distance'],
                 'Description': run['description']  # Full description for editing
@@ -218,7 +218,7 @@ def render_add_run_page():
                         max_chars=500
                     )
                 },
-                disabled=["Run", "Time", "EMR", "Char Acc", "Images", "Total Chars", "Edit Dist"],
+                disabled=["Run", "Time", "Plate Acc", "Char Acc", "Plates", "Total Chars", "Edit Dist"],
                 use_container_width=True,
                 hide_index=True,
                 key="runs_editor"
@@ -238,7 +238,7 @@ def render_add_run_page():
                 
                 # Table header
                 header_cols = st.columns([2, 2, 0.8, 1, 0.8, 1, 1, 3.5])
-                headers = ["Run Name", "Time", "EMR", "Char Acc", "Images", "Chars", "Edit", "Description"]
+                headers = ["Run Name", "Time", "Plate Acc", "Char Acc", "Plates", "Chars", "Edit", "Description"]
                 for col, header in zip(header_cols, headers):
                     col.markdown(f"**{header}**")
                 
@@ -255,11 +255,11 @@ def render_add_run_page():
                     cols[1].caption(run['timestamp'].strftime('%m/%d %H:%M'))
                     
                     # Metrics without color coding
-                    cols[2].caption(f"{run['metrics']['emr']:.1%}")
+                    cols[2].caption(f"{run['metrics']['plate_accuracy']:.1%}")
                     cols[3].caption(f"{run['metrics']['char_accuracy']:.1%}")
                     
                     # Simple numbers
-                    cols[4].caption(str(run['metrics']['n_images']))
+                    cols[4].caption(str(run['metrics']['n_plates']))
                     cols[5].caption(str(run['metrics']['total_gt_chars']))
                     cols[6].caption(str(run['metrics']['total_edit_distance']))
                     

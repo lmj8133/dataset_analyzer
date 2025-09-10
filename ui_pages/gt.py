@@ -25,7 +25,7 @@ def render_gt_page():
         st.session_state.processing_gt = False
     
     if 'gt_labels' in st.session_state and st.session_state.gt_labels:
-        st.success(f"✅ GT labels loaded: {len(st.session_state.gt_labels)} images")
+        st.success(f"✅ GT labels loaded: {len(st.session_state.gt_labels)} plates")
         
         if st.button("🔄 Reset GT Labels", type="secondary"):
             st.session_state.gt_labels = {}
@@ -199,7 +199,7 @@ def render_gt_page():
         labels = st.session_state.gt_labels
         
         with col1:
-            st.metric("Total Images", len(labels))
+            st.metric("Total Plates", len(labels))
         
         with col2:
             total_chars = sum(len(data['chars']) for data in labels.values())
@@ -241,7 +241,7 @@ def render_gt_page():
                     height=400
                 )
         
-        with st.expander("🔍 Sample Preview (First 5 images)"):
+        with st.expander("🔍 Sample Preview (First 5 plates)"):
             sample_items = list(labels.items())[:5]
             
             for img_name, data in sample_items:

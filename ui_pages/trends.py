@@ -37,7 +37,7 @@ def render_overall_trends(runs):
     col1, col2 = st.columns([3, 1])
     
     with col2:
-        show_emr = st.checkbox("Show EMR", value=True)
+        show_plate_accuracy = st.checkbox("Show Plate Accuracy", value=True)
         show_char_acc = st.checkbox("Show Char Accuracy", value=True)
         
         st.divider()
@@ -59,27 +59,27 @@ def render_overall_trends(runs):
         chars_deltas = []
         
         for i, run in enumerate(runs):
-            n_images = run['metrics'].get('n_images', 0)
+            n_plates = run['metrics'].get('n_plates', 0)
             total_chars = run['metrics'].get('total_gt_chars', 0)
             
             if i == 0:
-                plates_deltas.append((n_images, None))
+                plates_deltas.append((n_plates, None))
                 chars_deltas.append((total_chars, None))
             else:
-                prev_images = runs[i-1]['metrics'].get('n_images', 0)
+                prev_plates = runs[i-1]['metrics'].get('n_plates', 0)
                 prev_chars = runs[i-1]['metrics'].get('total_gt_chars', 0)
-                plates_deltas.append((n_images, n_images - prev_images))
+                plates_deltas.append((n_plates, n_plates - prev_plates))
                 chars_deltas.append((total_chars, total_chars - prev_chars))
         
-        if show_emr:
-            emr_values = [run['metrics']['emr'] * 100 for run in runs]
+        if show_plate_accuracy:
+            plate_accuracy_values = [run['metrics']['plate_accuracy'] * 100 for run in runs]
             
             # Build custom hover text with plate info
             hover_texts = []
-            for i, emr in enumerate(emr_values):
+            for i, plate_acc in enumerate(plate_accuracy_values):
                 plates_total, plates_delta = plates_deltas[i]
                 
-                hover_text = f'EMR: {emr:.2f}%<br>'
+                hover_text = f'Plate Accuracy: {plate_acc:.2f}%<br>'
                 hover_text += f'車牌數: {plates_total:,}'
                 if plates_delta is not None:
                     hover_text += f' ({plates_delta:+,})'
@@ -87,9 +87,9 @@ def render_overall_trends(runs):
             
             fig.add_trace(go.Scatter(
                 x=x_labels,
-                y=emr_values,
+                y=plate_accuracy_values,
                 mode='lines+markers',
-                name='EMR',
+                name='Plate Accuracy',
                 line=dict(color='#2E86AB', width=3),
                 marker=dict(size=8),
                 hovertemplate='%{customdata}<extra></extra>',
@@ -160,13 +160,13 @@ def render_overall_trends(runs):
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("EMR", f"{run['metrics']['emr']:.2%}")
+            st.metric("Plate Accuracy", f"{run['metrics']['plate_accuracy']:.2%}")
         
         with col2:
             st.metric("Char Accuracy", f"{run['metrics']['char_accuracy']:.2%}")
         
         with col3:
-            st.metric("Total Images", f"{run['metrics']['n_images']:,}")
+            st.metric("Total Plates", f"{run['metrics']['n_plates']:,}")
         
         with col4:
             st.metric("Edit Distance", f"{run['metrics']['total_edit_distance']:,}")

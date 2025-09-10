@@ -101,7 +101,7 @@ class DataManager:
             gt_count = len(st.session_state.get("gt_labels", {}))
             run_count = len(st.session_state.get("runs", []))
             
-            return True, f"Loaded: {gt_count} GT images, {run_count} runs (saved {last_updated})"
+            return True, f"Loaded: {gt_count} GT plates, {run_count} runs (saved {last_updated})"
             
         except json.JSONDecodeError as e:
             return False, f"Invalid JSON format: {str(e)}"
@@ -120,7 +120,7 @@ class DataManager:
         return {
             "labels": labels,
             "stats": {
-                "total_images": len(labels),
+                "total_plates": len(labels),
                 "total_chars": total_chars,
                 "avg_plate_length": total_chars / len(labels) if labels else 0,
                 "upload_time": st.session_state.get("gt_upload_time", datetime.now()).isoformat()
