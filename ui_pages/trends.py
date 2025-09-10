@@ -12,8 +12,8 @@ def render_trends_page():
     """Render the Trends page with recognition rate charts."""
     st.title("📈 Recognition Rate Trends")
     
-    if 'runs' not in st.session_state or len(st.session_state.runs) < 2:
-        st.warning("⚠️ Need at least 2 runs to show trends. Please add more runs.")
+    if 'runs' not in st.session_state or len(st.session_state.runs) == 0:
+        st.info("📊 No runs available yet. Please add runs to view trends.")
         st.stop()
     
     runs = st.session_state.runs
@@ -252,7 +252,8 @@ def render_delta_counts(runs):
     for cls_id in range(36):
         row = []
         for delta in delta_data:
-            val = delta.get(cls_id, 0)
+            # Handle both string and integer keys
+            val = delta.get(cls_id, delta.get(str(cls_id), 0))
             if show_positive_only and val <= 0:
                 val = 0
             row.append(val)
@@ -293,7 +294,7 @@ def render_delta_counts(runs):
         delta = delta_data[selected_run_idx]
         
         df_delta = pd.DataFrame([
-            {'Character': CLS_MAP[cls_id], 'Delta': count}
+            {'Character': CLS_MAP[int(cls_id) if isinstance(cls_id, str) else cls_id], 'Delta': count}
             for cls_id, count in delta.items()
             if count != 0
         ])
