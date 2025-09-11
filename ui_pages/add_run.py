@@ -35,8 +35,9 @@ def render_add_run_page():
         with col1:
             run_name = st.text_input(
                 "Run Name (optional)",
-                placeholder=f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
-                help="Leave empty for auto-generated name"
+                placeholder="run_YYYYMMDD_HHMMSS",
+                help="Leave empty for auto-generated name",
+                key="run_name_input"
             )
         
         with col2:
@@ -84,7 +85,7 @@ def render_add_run_page():
                 
                 start_time = time.time()
                 
-                if not run_name:
+                if not run_name or run_name.strip() == "":
                     run_name = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 
                 try:
