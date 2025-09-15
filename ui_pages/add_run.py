@@ -112,6 +112,7 @@ def render_add_run_page():
                     status_text.text("Computing metrics...")
                     
                     train_counts = get_class_counts(train_labels)
+                    n_train_plates = len(train_labels)
                     
                     metrics = evaluate_run(
                         st.session_state.gt_labels,
@@ -125,7 +126,8 @@ def render_add_run_page():
                         'description': run_description,
                         'timestamp': datetime.now(),
                         'metrics': metrics,
-                        'train_counts': train_counts
+                        'train_counts': train_counts,
+                        'n_train_plates': n_train_plates
                     }
                     
                     st.session_state.runs.append(run_data)

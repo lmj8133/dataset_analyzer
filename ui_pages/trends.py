@@ -167,7 +167,7 @@ def render_overall_trends(runs):
             st.metric("Char Accuracy", f"{run['metrics']['char_accuracy']:.2%}")
         
         with col3:
-            st.metric("Total Plates", f"{run['metrics']['n_plates']:,}")
+            st.metric("Total Plates", f"{run.get('n_train_plates', 0):,}")
         
         with col4:
             st.metric("Edit Distance", f"{run['metrics']['total_edit_distance']:,}")
@@ -454,17 +454,35 @@ def render_delta_counts(runs):
     """)
     
     delta_data = []
+    plate_deltas = []
     delta_runs = []
     
     for i, run in enumerate(runs):
         prev_counts = runs[i-1]['train_counts'] if i > 0 else None
         delta = compute_delta_counts(run['train_counts'], prev_counts)
         delta_data.append(delta)
+        
+        # Calculate plate count delta (using training plates)
+        n_plates = run.get('n_train_plates', 0)
+        prev_plates = runs[i-1].get('n_train_plates', 0) if i > 0 else 0
+        plate_delta = n_plates - prev_plates
+        plate_deltas.append(plate_delta)
+        
         delta_runs.append(run['name'])
     
     show_positive_only = st.checkbox("Show positive values only", value=False)
     
+    # Add plates row first
     heatmap_values = []
+    plate_row = []
+    for plate_delta in plate_deltas:
+        val = plate_delta
+        if show_positive_only and val <= 0:
+            val = 0
+        plate_row.append(val)
+    heatmap_values.append(plate_row)
+    
+    # Add character rows
     for cls_id in range(36):
         row = []
         for delta in delta_data:
@@ -475,10 +493,13 @@ def render_delta_counts(runs):
             row.append(val)
         heatmap_values.append(row)
     
+    # Create y-axis labels with plates first
+    y_labels = ['Plates'] + [CLS_MAP[i] for i in range(36)]
+    
     fig_heatmap = go.Figure(data=go.Heatmap(
         z=heatmap_values,
         x=delta_runs,
-        y=[CLS_MAP[i] for i in range(36)],
+        y=y_labels,
         colorscale='RdBu_r',
         zmid=0,
         text=[[str(int(val)) if val != 0 else '' for val in row] for row in heatmap_values],
@@ -508,12 +529,22 @@ def render_delta_counts(runs):
     
     if selected_run_idx is not None:
         delta = delta_data[selected_run_idx]
+        plate_delta = plate_deltas[selected_run_idx]
         
-        df_delta = pd.DataFrame([
-            {'Character': CLS_MAP[int(cls_id) if isinstance(cls_id, str) else cls_id], 'Delta': count}
-            for cls_id, count in delta.items()
-            if count != 0
-        ])
+        # Create DataFrame with plates first, then characters
+        delta_items = []
+        
+        # Add plate delta if non-zero
+        if plate_delta != 0:
+            delta_items.append({'Character': 'Plates', 'Delta': plate_delta})
+        
+        # Add character deltas if non-zero
+        for cls_id, count in delta.items():
+            if count != 0:
+                char_name = CLS_MAP[int(cls_id) if isinstance(cls_id, str) else cls_id]
+                delta_items.append({'Character': char_name, 'Delta': count})
+        
+        df_delta = pd.DataFrame(delta_items)
         
         if not df_delta.empty:
             df_delta = df_delta.sort_values('Delta', ascending=False)
@@ -541,9 +572,17 @@ def render_delta_counts(runs):
             col1, col2 = st.columns(2)
             
             with col1:
-                st.metric("Total Added", f"+{sum(v for v in delta.values() if v > 0):,}")
+                # Include plate delta in total added calculation
+                total_added = sum(v for v in delta.values() if v > 0)
+                if plate_delta > 0:
+                    total_added += plate_delta
+                st.metric("Total Added", f"+{total_added:,}")
             
             with col2:
-                st.metric("Total Removed", f"{sum(v for v in delta.values() if v < 0):,}")
+                # Include plate delta in total removed calculation
+                total_removed = sum(v for v in delta.values() if v < 0)
+                if plate_delta < 0:
+                    total_removed += plate_delta
+                st.metric("Total Removed", f"{total_removed:,}")
         else:
             st.info("No changes in this run compared to baseline.")
