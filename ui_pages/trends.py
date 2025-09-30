@@ -618,20 +618,23 @@ def render_per_class_trends(runs):
     st.divider()
     st.subheader("Character Accuracy Heatmap (All Runs)")
 
-    # Include Plates first, then all characters
-    all_classes = ['Plates'] + list(CLS_MAP.values())
-
+    # Use filtered and sorted classes (same as Per-Class Analysis Chart)
+    heatmap_classes = []
     heatmap_data = []
 
-    # Add Plates row first
-    plates_row = []
-    for run in runs:
-        plate_acc = run['metrics']['plate_accuracy'] * 100
-        plates_row.append(plate_acc)
-    heatmap_data.append(plates_row)
+    # Add Plates row first if selected
+    if 'Plates' in selected_classes:
+        heatmap_classes.append('Plates')
+        plates_row = []
+        for run in runs:
+            plate_acc = run['metrics']['plate_accuracy'] * 100
+            plates_row.append(plate_acc)
+        heatmap_data.append(plates_row)
 
-    # Add character rows
-    for char in CLS_MAP.values():
+    # Add character rows for selected classes only (using filtered indices)
+    for i in filtered_char_indices:
+        char = CLS_MAP[i]
+        heatmap_classes.append(char)
         row = []
         for run in runs:
             per_class = run['metrics']['per_class_accuracy']
@@ -644,7 +647,7 @@ def render_per_class_trends(runs):
     fig_heatmap = go.Figure(data=go.Heatmap(
         z=heatmap_data,
         x=[run['name'] for run in runs],
-        y=all_classes,
+        y=heatmap_classes,
         colorscale='RdYlGn',
         zmid=50,
         text=[[f'{val:.1f}%' for val in row] for row in heatmap_data],
@@ -653,8 +656,10 @@ def render_per_class_trends(runs):
         colorbar=dict(title="Accuracy (%)")
     ))
 
+    # Update title with selected classes count
+    heatmap_title_suffix = f" ({len(selected_classes)} selected)" if len(selected_classes) < 37 else ""
     fig_heatmap.update_layout(
-        title="Character & Plate Accuracy Heatmap (Runs × Classes)",
+        title=f"Character & Plate Accuracy Heatmap (Runs × Classes){heatmap_title_suffix}",
         xaxis_title="Run Name",
         yaxis_title="Class",
         height=850
