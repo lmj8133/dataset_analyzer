@@ -531,38 +531,95 @@ def render_per_class_trends(runs):
     st.plotly_chart(fig, use_container_width=True)
     
     # Display summary metrics
-    if show_gt_distribution:
-        cols = st.columns(6)
+    # Separate plates and chars statistics
+    has_plates = 'Plates' in selected_classes
+
+    if has_plates:
+        # Plates statistics (first element)
+        plates_base = base_counts[0]
+        plates_delta = delta_counts[0]
+        plates_gt = gt_distribution[0] if show_gt_distribution else 0
+        plates_total = plates_base + plates_delta
+
+        # Chars statistics (remaining elements)
+        chars_base = base_counts[1:]
+        chars_delta = delta_counts[1:]
+        chars_gt = gt_distribution[1:] if show_gt_distribution else []
+        chars_total = sum(chars_base) + sum(chars_delta)
+        chars_new = sum(chars_delta)
+        chars_gt_total = sum(chars_gt) if show_gt_distribution else 0
+
+        # Accuracy statistics for chars only
+        chars_accuracies = accuracies[1:]
+        chars_prev_accuracies = prev_accuracies[1:]
     else:
-        cols = st.columns(5)
+        # No plates, all data is chars
+        chars_base = base_counts
+        chars_delta = delta_counts
+        chars_gt = gt_distribution if show_gt_distribution else []
+        chars_total = sum(chars_base) + sum(chars_delta)
+        chars_new = sum(chars_delta)
+        chars_gt_total = sum(chars_gt) if show_gt_distribution else 0
 
-    with cols[0]:
-        total_samples = sum(base_counts) + sum(delta_counts)
-        st.metric("Total Training Samples", f"{total_samples:,}",
-                  help=f"Total samples for {len(selected_classes)} selected classes")
+        # Accuracy statistics for all selected classes
+        chars_accuracies = accuracies
+        chars_prev_accuracies = prev_accuracies
 
-    with cols[1]:
-        total_new = sum(delta_counts)
-        st.metric("New Additions", f"{total_new:,}")
+    # Row 1: Plates statistics (if selected)
+    if has_plates:
+        st.markdown("**🚗 Plates Statistics**")
+        if show_gt_distribution:
+            plate_cols = st.columns(3)
+        else:
+            plate_cols = st.columns(2)
 
-    with cols[2]:
-        # Count accuracy changes
-        improved = sum(1 for curr, prev in zip(accuracies, prev_accuracies) if curr > prev)
+        with plate_cols[0]:
+            st.metric("Total Training Plates", f"{plates_total:,}",
+                      help="Total training plate count")
+
+        with plate_cols[1]:
+            st.metric("New Plate Additions", f"{plates_delta:,}",
+                      help="New plates added in this run")
+
+        if show_gt_distribution:
+            with plate_cols[2]:
+                st.metric("Total GT Plates", f"{plates_gt:,}",
+                          help="Total GT test plates")
+
+        st.divider()
+
+    # Row 2: Chars statistics
+    st.markdown("**🔤 Character Statistics**")
+    if show_gt_distribution:
+        char_cols = st.columns(6)
+    else:
+        char_cols = st.columns(5)
+
+    with char_cols[0]:
+        st.metric("Total Training Chars", f"{chars_total:,}",
+                  help=f"Total character samples for selected classes")
+
+    with char_cols[1]:
+        st.metric("New Char Additions", f"{chars_new:,}",
+                  help="New character samples added in this run")
+
+    with char_cols[2]:
+        # Count accuracy changes for chars
+        improved = sum(1 for curr, prev in zip(chars_accuracies, chars_prev_accuracies) if curr > prev)
         st.metric("Classes Improved", improved, delta=f"↑ {improved}", delta_color="normal")
 
-    with cols[3]:
-        declined = sum(1 for curr, prev in zip(accuracies, prev_accuracies) if curr < prev)
+    with char_cols[3]:
+        declined = sum(1 for curr, prev in zip(chars_accuracies, chars_prev_accuracies) if curr < prev)
         st.metric("Classes Declined", declined, delta=f"↓ {declined}", delta_color="inverse")
 
-    with cols[4]:
-        perfect_classes = sum(1 for acc in accuracies if acc >= 95)
-        st.metric("Classes ≥95%", f"{perfect_classes}/{len(selected_classes)}")
+    with char_cols[4]:
+        perfect_classes = sum(1 for acc in chars_accuracies if acc >= 95)
+        st.metric("Classes ≥95%", f"{perfect_classes}/{len(chars_accuracies)}")
 
     if show_gt_distribution:
-        with cols[5]:
-            total_gt = sum(gt_distribution)
-            st.metric("Total GT Samples", f"{total_gt:,}",
-                      help=f"Total GT test samples for {len(selected_classes)} selected classes")
+        with char_cols[5]:
+            st.metric("Total GT Chars", f"{chars_gt_total:,}",
+                      help="Total GT test character samples")
     
     st.divider()
     st.subheader("Character Accuracy Heatmap (All Runs)")
