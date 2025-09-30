@@ -60,15 +60,16 @@ def render_overall_trends(runs):
         chars_deltas = []
         
         for i, run in enumerate(runs):
-            n_plates = run['metrics'].get('n_plates', 0)
-            total_chars = run['metrics'].get('total_gt_chars', 0)
-            
+            # Use training set counts for consistency
+            n_plates = run.get('n_train_plates', 0)
+            total_chars = run.get('n_train_chars', sum(run['train_counts'].values()))
+
             if i == 0:
                 plates_deltas.append((n_plates, None))
                 chars_deltas.append((total_chars, None))
             else:
-                prev_plates = runs[i-1]['metrics'].get('n_plates', 0)
-                prev_chars = runs[i-1]['metrics'].get('total_gt_chars', 0)
+                prev_plates = runs[i-1].get('n_train_plates', 0)
+                prev_chars = runs[i-1].get('n_train_chars', sum(runs[i-1]['train_counts'].values()))
                 plates_deltas.append((n_plates, n_plates - prev_plates))
                 chars_deltas.append((total_chars, total_chars - prev_chars))
         
@@ -185,26 +186,125 @@ def render_per_class_trends(runs):
         return
     
     # Select run for detailed view
-    selected_run_idx = st.selectbox(
-        "Select run for detailed analysis",
-        options=list(range(len(runs))),
-        format_func=lambda x: runs[x]['name'],
-        index=len(runs)-1 if runs else 0,
-        help="Choose a training run to view its per-class accuracy and training data distribution"
-    )
-    
-    if selected_run_idx is None:
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        selected_run_idx = st.selectbox(
+            "Select run for detailed analysis",
+            options=list(range(len(runs))),
+            format_func=lambda x: runs[x]['name'],
+            index=len(runs)-1 if runs else 0,
+            help="Choose a training run to view its per-class accuracy and training data distribution"
+        )
+
+    with col2:
+        sort_option = st.selectbox(
+            "Sort by",
+            options=["Default Order", "Accuracy", "Data Count"],
+            index=0,
+            help="Sort character classes by accuracy or training data count. Plates always remain first."
+        )
+
+    # Add class selection with checkboxes
+    st.divider()
+    all_classes = ['Plates'] + [CLS_MAP[i] for i in range(36)]
+
+    # Initialize session state for checkboxes if not present
+    for cls in all_classes:
+        key = f"class_check_{cls}"
+        if key not in st.session_state:
+            st.session_state[key] = True  # Default to all selected
+
+    with st.expander("📊 Select classes to display", expanded=True):
+        # Control buttons and selection count
+        col_btn1, col_btn2, col_info = st.columns([1, 1, 3])
+        with col_btn1:
+            if st.button("Select All", use_container_width=True, key="select_all_btn"):
+                for cls in all_classes:
+                    st.session_state[f"class_check_{cls}"] = True
+                st.rerun()
+        with col_btn2:
+            if st.button("Clear All", use_container_width=True, key="clear_all_btn"):
+                for cls in all_classes:
+                    st.session_state[f"class_check_{cls}"] = False
+                st.rerun()
+        with col_info:
+            # Count selected classes
+            selected_count = sum(1 for cls in all_classes if st.session_state.get(f"class_check_{cls}", True))
+            st.info(f"📌 Selected: {selected_count}/{len(all_classes)} classes")
+
+        st.markdown("---")  # Divider line
+
+        # Row 1: Plates only
+        st.checkbox("🚗 **Plates**", key="class_check_Plates")
+
+        # Row 2: Numbers 0-9
+        st.markdown("**Numbers:**")
+        num_cols = st.columns(10)
+        for i in range(10):
+            with num_cols[i]:
+                st.checkbox(str(i), key=f"class_check_{i}")
+
+        # Row 3: Letters A-Z
+        st.markdown("**Letters:**")
+        # First row of letters: A-M (13 letters)
+        letter_cols1 = st.columns(13)
+        for i in range(13):
+            char_idx = i + 10  # A starts at index 10
+            with letter_cols1[i]:
+                st.checkbox(CLS_MAP[char_idx], key=f"class_check_{CLS_MAP[char_idx]}")
+
+        # Second row of letters: N-Z (13 letters)
+        letter_cols2 = st.columns(13)
+        for i in range(13):
+            char_idx = i + 23  # N starts at index 23
+            if char_idx < 36:  # Make sure we don't exceed Z
+                with letter_cols2[i]:
+                    st.checkbox(CLS_MAP[char_idx], key=f"class_check_{CLS_MAP[char_idx]}")
+
+    # Collect selected classes
+    selected_classes = []
+    if st.session_state.get("class_check_Plates", True):
+        selected_classes.append("Plates")
+    for i in range(36):
+        cls_name = CLS_MAP[i]
+        if st.session_state.get(f"class_check_{cls_name}", True):
+            selected_classes.append(cls_name)
+
+    if selected_run_idx is None or not selected_classes:
+        if not selected_classes:
+            st.info("Please select at least one class to display.")
         return
     
     selected_run = runs[selected_run_idx]
     prev_run = runs[selected_run_idx - 1] if selected_run_idx > 0 else None
-    
-    # Prepare data for 37 classes (plates + 36 characters)
-    class_labels = ['Plates'] + [CLS_MAP[i] for i in range(36)]
-    
+
     # Calculate previous counts (for stacked bar chart)
     prev_counts = prev_run['train_counts'] if prev_run else {}
     curr_counts = selected_run['train_counts']
+
+    # Get per-class accuracy for sorting
+    per_class_acc = selected_run['metrics']['per_class_accuracy']
+
+    # Filter character indices based on selected classes
+    all_char_indices = list(range(36))
+    filtered_char_indices = [i for i in all_char_indices if CLS_MAP[i] in selected_classes]
+
+    # Sort filtered character indices based on selected option
+    if sort_option == "Accuracy":
+        # Sort by accuracy (descending)
+        filtered_char_indices.sort(key=lambda i: per_class_acc[CLS_MAP[i]]['accuracy'] * 100 if CLS_MAP[i] in per_class_acc else 0, reverse=True)
+    elif sort_option == "Data Count":
+        # Sort by data count (descending)
+        filtered_char_indices.sort(key=lambda i: curr_counts.get(i, curr_counts.get(str(i), 0)), reverse=True)
+    # else: keep default order
+
+    # Prepare class labels based on selection
+    # Plates always first if selected, then sorted characters
+    class_labels = []
+    if 'Plates' in selected_classes:
+        class_labels.append('Plates')
+    class_labels.extend([CLS_MAP[i] for i in filtered_char_indices])
     
     # Prepare data arrays
     base_counts = []  # Previous training counts
@@ -213,42 +313,43 @@ def render_per_class_trends(runs):
     prev_accuracies = []  # Previous accuracy values for comparison
     accuracy_colors = []  # Colors for K-line style
     hover_texts = []  # Custom hover text
+
+    # Handle plates data if selected
+    if 'Plates' in selected_classes:
+        n_plates = selected_run.get('n_train_plates', 0)
+        prev_plates = prev_run.get('n_train_plates', 0) if prev_run else 0
+        base_counts.append(prev_plates)
+        delta_counts.append(n_plates - prev_plates)
+
+        curr_plate_acc = selected_run['metrics']['plate_accuracy'] * 100
+        prev_plate_acc = prev_run['metrics']['plate_accuracy'] * 100 if prev_run else curr_plate_acc
+        accuracies.append(curr_plate_acc)
+        prev_accuracies.append(prev_plate_acc)
     
-    # Handle plates data
-    n_plates = selected_run['metrics'].get('n_plates', 0)
-    prev_plates = prev_run['metrics'].get('n_plates', 0) if prev_run else 0
-    base_counts.append(prev_plates)
-    delta_counts.append(n_plates - prev_plates)
-    
-    curr_plate_acc = selected_run['metrics']['plate_accuracy'] * 100
-    prev_plate_acc = prev_run['metrics']['plate_accuracy'] * 100 if prev_run else curr_plate_acc
-    accuracies.append(curr_plate_acc)
-    prev_accuracies.append(prev_plate_acc)
-    
-    # Determine color and hover text based on change
-    if not prev_run:
-        # First run - always gray
-        accuracy_colors.append('#888888')
-        hover_text = f"Plates<br>Baseline: {curr_plate_acc:.1f}%<br>(Initial run)"
-    elif curr_plate_acc > prev_plate_acc:
-        accuracy_colors.append('#FF4444')  # Red for increase
-        change = f"+{curr_plate_acc - prev_plate_acc:.1f}%"
-        hover_text = f"Plates<br>Current: {curr_plate_acc:.1f}%<br>Previous: {prev_plate_acc:.1f}%<br>Change: {change}"
-    elif curr_plate_acc < prev_plate_acc:
-        accuracy_colors.append('#44AA44')  # Green for decrease
-        change = f"{curr_plate_acc - prev_plate_acc:.1f}%"
-        hover_text = f"Plates<br>Current: {curr_plate_acc:.1f}%<br>Previous: {prev_plate_acc:.1f}%<br>Change: {change}"
-    else:
-        accuracy_colors.append('#888888')  # Gray for no change
-        hover_text = f"Plates<br>Current: {curr_plate_acc:.1f}%<br>Previous: {prev_plate_acc:.1f}%<br>No change"
-    
-    hover_texts.append(hover_text)
+        # Determine color and hover text based on change
+        if not prev_run:
+            # First run - always gray
+            accuracy_colors.append('#888888')
+            hover_text = f"Plates<br>Baseline: {curr_plate_acc:.1f}%<br>(Initial run)"
+        elif curr_plate_acc > prev_plate_acc:
+            accuracy_colors.append('#FF4444')  # Red for increase
+            change = f"+{curr_plate_acc - prev_plate_acc:.1f}%"
+            hover_text = f"Plates<br>Current: {curr_plate_acc:.1f}%<br>Previous: {prev_plate_acc:.1f}%<br>Change: {change}"
+        elif curr_plate_acc < prev_plate_acc:
+            accuracy_colors.append('#44AA44')  # Green for decrease
+            change = f"{curr_plate_acc - prev_plate_acc:.1f}%"
+            hover_text = f"Plates<br>Current: {curr_plate_acc:.1f}%<br>Previous: {prev_plate_acc:.1f}%<br>Change: {change}"
+        else:
+            accuracy_colors.append('#888888')  # Gray for no change
+            hover_text = f"Plates<br>Current: {curr_plate_acc:.1f}%<br>Previous: {prev_plate_acc:.1f}%<br>No change"
+
+        hover_texts.append(hover_text)
     
     # Handle character data
-    per_class_acc = selected_run['metrics']['per_class_accuracy']
     prev_per_class_acc = prev_run['metrics']['per_class_accuracy'] if prev_run else {}
-    
-    for i in range(36):
+
+    # Process only filtered characters in sorted order
+    for i in filtered_char_indices:
         char = CLS_MAP[i]
         
         # Get counts
@@ -357,9 +458,10 @@ def render_per_class_trends(runs):
         secondary_y=True
     )
     
-    # Update layout
+    # Update layout with selected classes count
+    title_suffix = f" ({len(selected_classes)} selected)" if len(selected_classes) < 37 else ""
     fig.update_layout(
-        title=f"Per-Class Analysis for {selected_run['name']}",
+        title=f"Per-Class Analysis for {selected_run['name']}{title_suffix}",
         barmode='stack',
         hovermode='x unified',
         height=600,
@@ -382,35 +484,46 @@ def render_per_class_trends(runs):
     
     # Display summary metrics
     col1, col2, col3, col4, col5 = st.columns(5)
-    
+
     with col1:
         total_samples = sum(base_counts) + sum(delta_counts)
-        st.metric("Total Training Samples", f"{total_samples:,}")
-    
+        st.metric("Total Training Samples", f"{total_samples:,}",
+                  help=f"Total samples for {len(selected_classes)} selected classes")
+
     with col2:
         total_new = sum(delta_counts)
         st.metric("New Additions", f"{total_new:,}")
-    
+
     with col3:
         # Count accuracy changes
         improved = sum(1 for curr, prev in zip(accuracies, prev_accuracies) if curr > prev)
         st.metric("Classes Improved", improved, delta=f"↑ {improved}", delta_color="normal")
-    
+
     with col4:
         declined = sum(1 for curr, prev in zip(accuracies, prev_accuracies) if curr < prev)
         st.metric("Classes Declined", declined, delta=f"↓ {declined}", delta_color="inverse")
-    
+
     with col5:
         perfect_classes = sum(1 for acc in accuracies if acc >= 95)
-        st.metric("Classes ≥95%", perfect_classes)
+        st.metric("Classes ≥95%", f"{perfect_classes}/{len(selected_classes)}")
     
     st.divider()
     st.subheader("Character Accuracy Heatmap (All Runs)")
-    
-    all_chars = list(CLS_MAP.values())
-    
+
+    # Include Plates first, then all characters
+    all_classes = ['Plates'] + list(CLS_MAP.values())
+
     heatmap_data = []
-    for char in all_chars:
+
+    # Add Plates row first
+    plates_row = []
+    for run in runs:
+        plate_acc = run['metrics']['plate_accuracy'] * 100
+        plates_row.append(plate_acc)
+    heatmap_data.append(plates_row)
+
+    # Add character rows
+    for char in CLS_MAP.values():
         row = []
         for run in runs:
             per_class = run['metrics']['per_class_accuracy']
@@ -419,11 +532,11 @@ def render_per_class_trends(runs):
             else:
                 row.append(0)
         heatmap_data.append(row)
-    
+
     fig_heatmap = go.Figure(data=go.Heatmap(
         z=heatmap_data,
         x=[run['name'] for run in runs],
-        y=all_chars,
+        y=all_classes,
         colorscale='RdYlGn',
         zmid=50,
         text=[[f'{val:.1f}%' for val in row] for row in heatmap_data],
@@ -431,12 +544,12 @@ def render_per_class_trends(runs):
         textfont={"size": 10},
         colorbar=dict(title="Accuracy (%)")
     ))
-    
+
     fig_heatmap.update_layout(
-        title="Character Accuracy Heatmap (Runs × Classes)",
+        title="Character & Plate Accuracy Heatmap (Runs × Classes)",
         xaxis_title="Run Name",
-        yaxis_title="Character",
-        height=800
+        yaxis_title="Class",
+        height=850
     )
     
     st.plotly_chart(fig_heatmap, use_container_width=True)

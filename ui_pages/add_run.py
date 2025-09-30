@@ -121,13 +121,17 @@ def render_add_run_page():
                         CLS_MAP
                     )
                     
+                    # Calculate training set statistics
+                    n_train_chars = sum(train_counts.values())
+
                     run_data = {
                         'name': run_name,
                         'description': run_description,
                         'timestamp': datetime.now(),
                         'metrics': metrics,
                         'train_counts': train_counts,
-                        'n_train_plates': n_train_plates
+                        'n_train_plates': n_train_plates,
+                        'n_train_chars': n_train_chars
                     }
                     
                     st.session_state.runs.append(run_data)
@@ -200,8 +204,8 @@ def render_add_run_page():
                 'Time': run['timestamp'].strftime('%Y-%m-%d %H:%M'),
                 'Plate Acc': f"{run['metrics']['plate_accuracy']:.2%}",
                 'Char Acc': f"{run['metrics']['char_accuracy']:.2%}",
-                'Plates': run['metrics']['n_plates'],
-                'Total Chars': run['metrics']['total_gt_chars'],
+                'Plates': run['n_train_plates'],
+                'Total Chars': run.get('n_train_chars', sum(run['train_counts'].values())),
                 'Edit Dist': run['metrics']['total_edit_distance'],
                 'Description': run['description']  # Full description for editing
             }
@@ -261,9 +265,9 @@ def render_add_run_page():
                     cols[2].caption(f"{run['metrics']['plate_accuracy']:.1%}")
                     cols[3].caption(f"{run['metrics']['char_accuracy']:.1%}")
                     
-                    # Simple numbers
-                    cols[4].caption(str(run['metrics']['n_plates']))
-                    cols[5].caption(str(run['metrics']['total_gt_chars']))
+                    # Simple numbers (from training set)
+                    cols[4].caption(str(run['n_train_plates']))
+                    cols[5].caption(str(run.get('n_train_chars', sum(run['train_counts'].values()))))
                     cols[6].caption(str(run['metrics']['total_edit_distance']))
                     
                     # Description with inline expander
