@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 from core.metrics import compute_delta_counts
-from core.io_yolo import CLS_MAP
+from core.io_yolo import CLS_MAP, get_class_counts
 
 
 def render_trends_page():
@@ -205,6 +205,19 @@ def render_per_class_trends(runs):
             help="Sort character classes by accuracy or training data count. Plates always remain first."
         )
 
+        # Check if GT data is available
+        has_gt_data = 'gt_labels' in st.session_state and st.session_state.gt_labels
+
+        if has_gt_data:
+            show_gt_distribution = st.checkbox(
+                "Show GT Distribution",
+                value=False,
+                help="Display Ground Truth test set character distribution alongside training data"
+            )
+        else:
+            st.info("💡 Upload GT data to compare distributions")
+            show_gt_distribution = False
+
     # Add class selection with checkboxes
     st.divider()
     all_classes = ['Plates'] + [CLS_MAP[i] for i in range(36)]
@@ -283,6 +296,14 @@ def render_per_class_trends(runs):
     prev_counts = prev_run['train_counts'] if prev_run else {}
     curr_counts = selected_run['train_counts']
 
+    # Calculate GT distribution if available and requested
+    gt_counts = {}
+    gt_n_plates = 0
+    if show_gt_distribution and has_gt_data:
+        gt_labels = st.session_state.gt_labels
+        gt_counts = get_class_counts(gt_labels)
+        gt_n_plates = len(gt_labels)
+
     # Get per-class accuracy for sorting
     per_class_acc = selected_run['metrics']['per_class_accuracy']
 
@@ -305,10 +326,11 @@ def render_per_class_trends(runs):
     if 'Plates' in selected_classes:
         class_labels.append('Plates')
     class_labels.extend([CLS_MAP[i] for i in filtered_char_indices])
-    
+
     # Prepare data arrays
     base_counts = []  # Previous training counts
     delta_counts = []  # New additions
+    gt_distribution = []  # GT test set counts
     accuracies = []   # Accuracy values
     prev_accuracies = []  # Previous accuracy values for comparison
     accuracy_colors = []  # Colors for K-line style
@@ -320,6 +342,7 @@ def render_per_class_trends(runs):
         prev_plates = prev_run.get('n_train_plates', 0) if prev_run else 0
         base_counts.append(prev_plates)
         delta_counts.append(n_plates - prev_plates)
+        gt_distribution.append(gt_n_plates if show_gt_distribution else 0)
 
         curr_plate_acc = selected_run['metrics']['plate_accuracy'] * 100
         prev_plate_acc = prev_run['metrics']['plate_accuracy'] * 100 if prev_run else curr_plate_acc
@@ -351,13 +374,17 @@ def render_per_class_trends(runs):
     # Process only filtered characters in sorted order
     for i in filtered_char_indices:
         char = CLS_MAP[i]
-        
+
         # Get counts
         prev_count = prev_counts.get(i, prev_counts.get(str(i), 0)) if prev_counts else 0
         curr_count = curr_counts.get(i, curr_counts.get(str(i), 0))
-        
+
         base_counts.append(prev_count)
         delta_counts.append(curr_count - prev_count)
+
+        # Get GT count
+        gt_count = gt_counts.get(i, gt_counts.get(str(i), 0)) if show_gt_distribution else 0
+        gt_distribution.append(gt_count)
         
         # Get accuracy
         curr_acc = per_class_acc[char]['accuracy'] * 100 if char in per_class_acc else 0
@@ -438,7 +465,23 @@ def render_per_class_trends(runs):
         ),
         secondary_y=False
     )
-    
+
+    # GT distribution layer (if enabled)
+    if show_gt_distribution:
+        fig.add_trace(
+            go.Bar(
+                x=class_labels,
+                y=gt_distribution,
+                name='GT Distribution',
+                marker_color='orange',
+                marker_pattern_shape='/',  # Add pattern to distinguish from training data
+                opacity=0.8,
+                hovertemplate='GT: %{y:,.0f}<extra></extra>',
+                yaxis='y'
+            ),
+            secondary_y=False
+        )
+
     # Add Candlestick chart for accuracy (K-line style)
     # Simple and clean implementation
     fig.add_trace(
@@ -460,6 +503,8 @@ def render_per_class_trends(runs):
     
     # Update layout with selected classes count
     title_suffix = f" ({len(selected_classes)} selected)" if len(selected_classes) < 37 else ""
+    if show_gt_distribution:
+        title_suffix += " + GT"
     fig.update_layout(
         title=f"Per-Class Analysis for {selected_run['name']}{title_suffix}",
         barmode='stack',
@@ -474,38 +519,50 @@ def render_per_class_trends(runs):
             x=1
         )
     )
-    
+
     # Update axes
     fig.update_xaxes(title_text="Class", tickangle=-45)
-    fig.update_yaxes(title_text="Training Sample Count", secondary_y=False)
+    y_axis_title = "Training Sample Count"
+    if show_gt_distribution:
+        y_axis_title += " / GT Count"
+    fig.update_yaxes(title_text=y_axis_title, secondary_y=False)
     fig.update_yaxes(title_text="Accuracy (%)", secondary_y=True, range=[0, 105])
     
     st.plotly_chart(fig, use_container_width=True)
     
     # Display summary metrics
-    col1, col2, col3, col4, col5 = st.columns(5)
+    if show_gt_distribution:
+        cols = st.columns(6)
+    else:
+        cols = st.columns(5)
 
-    with col1:
+    with cols[0]:
         total_samples = sum(base_counts) + sum(delta_counts)
         st.metric("Total Training Samples", f"{total_samples:,}",
                   help=f"Total samples for {len(selected_classes)} selected classes")
 
-    with col2:
+    with cols[1]:
         total_new = sum(delta_counts)
         st.metric("New Additions", f"{total_new:,}")
 
-    with col3:
+    with cols[2]:
         # Count accuracy changes
         improved = sum(1 for curr, prev in zip(accuracies, prev_accuracies) if curr > prev)
         st.metric("Classes Improved", improved, delta=f"↑ {improved}", delta_color="normal")
 
-    with col4:
+    with cols[3]:
         declined = sum(1 for curr, prev in zip(accuracies, prev_accuracies) if curr < prev)
         st.metric("Classes Declined", declined, delta=f"↓ {declined}", delta_color="inverse")
 
-    with col5:
+    with cols[4]:
         perfect_classes = sum(1 for acc in accuracies if acc >= 95)
         st.metric("Classes ≥95%", f"{perfect_classes}/{len(selected_classes)}")
+
+    if show_gt_distribution:
+        with cols[5]:
+            total_gt = sum(gt_distribution)
+            st.metric("Total GT Samples", f"{total_gt:,}",
+                      help=f"Total GT test samples for {len(selected_classes)} selected classes")
     
     st.divider()
     st.subheader("Character Accuracy Heatmap (All Runs)")
