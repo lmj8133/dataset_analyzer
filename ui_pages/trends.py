@@ -618,6 +618,13 @@ def render_per_class_trends(runs):
     st.divider()
     st.subheader("Character Accuracy Heatmap (All Runs)")
 
+    # Color scale option
+    use_dynamic_scale = st.checkbox(
+        "Dynamic Color Scale",
+        value=False,
+        help="Adjust color scale based on actual data range for better contrast"
+    )
+
     # Use filtered and sorted classes (same as Per-Class Analysis Chart)
     heatmap_classes = []
     heatmap_data = []
@@ -644,12 +651,27 @@ def render_per_class_trends(runs):
                 row.append(0)
         heatmap_data.append(row)
 
+    # Calculate color scale parameters
+    if use_dynamic_scale and heatmap_data:
+        # Flatten all data to find min/max
+        all_values = [val for row in heatmap_data for val in row]
+        zmin = min(all_values)
+        zmax = max(all_values)
+        zmid = (zmin + zmax) / 2
+    else:
+        # Fixed scale: 0-100%
+        zmin = 0
+        zmax = 100
+        zmid = 50
+
     fig_heatmap = go.Figure(data=go.Heatmap(
         z=heatmap_data,
         x=[run['name'] for run in runs],
         y=heatmap_classes,
         colorscale='RdYlGn',
-        zmid=50,
+        zmin=zmin,
+        zmax=zmax,
+        zmid=zmid,
         text=[[f'{val:.1f}%' for val in row] for row in heatmap_data],
         texttemplate='%{text}',
         textfont={"size": 10},
