@@ -40,7 +40,12 @@ def render_overall_trends(runs):
     with col2:
         show_plate_accuracy = st.checkbox("Show Plate Accuracy", value=True)
         show_char_acc = st.checkbox("Show Char Accuracy", value=True)
-        
+        use_dynamic_yaxis = st.checkbox(
+            "Dynamic Y-axis Scale",
+            value=False,
+            help="Adjust Y-axis range based on actual data for better contrast"
+        )
+
         st.divider()
         
         selected_run = st.selectbox(
@@ -58,7 +63,9 @@ def render_overall_trends(runs):
         # Calculate deltas for plates and characters
         plates_deltas = []
         chars_deltas = []
-        
+        plate_accuracy_values = []
+        char_acc_values = []
+
         for i, run in enumerate(runs):
             # Use training set counts for consistency
             n_plates = run.get('n_train_plates', 0)
@@ -133,12 +140,35 @@ def render_overall_trends(runs):
                 xanchor='center',
                 yanchor='top'
             )
-        
+
+        # Calculate Y-axis range
+        if use_dynamic_yaxis:
+            # Collect all displayed values
+            all_values = []
+            if show_plate_accuracy:
+                all_values.extend(plate_accuracy_values)
+            if show_char_acc:
+                all_values.extend(char_acc_values)
+
+            if all_values:
+                y_min = min(all_values)
+                y_max = max(all_values)
+                # Add padding (5% of range, minimum 2%)
+                y_range = y_max - y_min
+                padding = max(y_range * 0.05, 2)
+                y_axis_range = [max(0, y_min - padding), min(100, y_max + padding)]
+            else:
+                # Fallback to fixed range if no data
+                y_axis_range = [0, 105]
+        else:
+            # Fixed range
+            y_axis_range = [0, 105]
+
         fig.update_layout(
             title="Recognition Rate Over Training Runs",
             xaxis_title="Run Name",
             yaxis_title="Recognition Rate (%)",
-            yaxis=dict(range=[0, 105]),
+            yaxis=dict(range=y_axis_range),
             hovermode='x unified',
             height=500,
             showlegend=True,
