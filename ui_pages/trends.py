@@ -207,16 +207,10 @@ def render_per_class_trends(runs):
 
         # Check if GT data is available
         has_gt_data = 'gt_labels' in st.session_state and st.session_state.gt_labels
+        show_gt_distribution = has_gt_data
 
-        if has_gt_data:
-            show_gt_distribution = st.checkbox(
-                "Show GT Distribution",
-                value=False,
-                help="Display Ground Truth test set character distribution alongside training data"
-            )
-        else:
+        if not has_gt_data:
             st.info("💡 Upload GT data to compare distributions")
-            show_gt_distribution = False
 
     # Add class selection with checkboxes
     st.divider()
