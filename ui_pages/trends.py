@@ -230,9 +230,15 @@ def render_per_class_trends(runs):
     with col2:
         sort_option = st.selectbox(
             "Sort by",
-            options=["Default Order", "Accuracy", "Data Count"],
+            options=["Default Order", "Accuracy", "Data Count", "GT Data Count"],
             index=0,
-            help="Sort character classes by accuracy or training data count. Plates always remain first."
+            help="Sort character classes by accuracy, training data count, or GT data count. Plates always remain first."
+        )
+
+        show_training_in_slider = st.checkbox(
+            "Show Training Data in Range Slider",
+            value=False,
+            help="Show training data (Previous + New) in the bottom navigation slider. When unchecked, only GT distribution is shown."
         )
 
         # Check if GT data is available
@@ -340,8 +346,11 @@ def render_per_class_trends(runs):
         # Sort by accuracy (descending)
         filtered_char_indices.sort(key=lambda i: per_class_acc[CLS_MAP[i]]['accuracy'] * 100 if CLS_MAP[i] in per_class_acc else 0, reverse=True)
     elif sort_option == "Data Count":
-        # Sort by data count (descending)
+        # Sort by training data count (descending)
         filtered_char_indices.sort(key=lambda i: curr_counts.get(i, curr_counts.get(str(i), 0)), reverse=True)
+    elif sort_option == "GT Data Count":
+        # Sort by GT data count (descending)
+        filtered_char_indices.sort(key=lambda i: gt_counts.get(i, gt_counts.get(str(i), 0)), reverse=True)
     # else: keep default order
 
     # Prepare class labels based on selection
@@ -490,22 +499,6 @@ def render_per_class_trends(runs):
         secondary_y=False
     )
 
-    # GT distribution layer (if enabled)
-    if show_gt_distribution:
-        fig.add_trace(
-            go.Bar(
-                x=class_labels,
-                y=gt_distribution,
-                name='GT Distribution',
-                marker_color='orange',
-                marker_pattern_shape='/',  # Add pattern to distinguish from training data
-                opacity=0.8,
-                hovertemplate='GT: %{y:,.0f}<extra></extra>',
-                yaxis='y'
-            ),
-            secondary_y=False
-        )
-
     # Add Candlestick chart for accuracy (K-line style)
     # Simple and clean implementation
     fig.add_trace(
@@ -527,8 +520,6 @@ def render_per_class_trends(runs):
     
     # Update layout with selected classes count
     title_suffix = f" ({len(selected_classes)} selected)" if len(selected_classes) < 37 else ""
-    if show_gt_distribution:
-        title_suffix += " + GT"
     fig.update_layout(
         title=f"Per-Class Analysis for {selected_run['name']}{title_suffix}",
         barmode='stack',
@@ -545,14 +536,76 @@ def render_per_class_trends(runs):
     )
 
     # Update axes
-    fig.update_xaxes(title_text="Class", tickangle=-45)
-    y_axis_title = "Training Sample Count"
-    if show_gt_distribution:
-        y_axis_title += " / GT Count"
-    fig.update_yaxes(title_text=y_axis_title, secondary_y=False)
+    fig.update_xaxes(
+        title_text="Class",
+        tickangle=-45,
+        rangeslider_visible=False  # Disable built-in rangeslider
+    )
+    fig.update_yaxes(title_text="Training Sample Count", secondary_y=False)
     fig.update_yaxes(title_text="Accuracy (%)", secondary_y=True, range=[0, 105])
-    
+
     st.plotly_chart(fig, use_container_width=True)
+
+    # Add custom overview bar chart below main chart
+    if show_gt_distribution:
+        fig_overview = go.Figure()
+
+        # Add training data if checkbox is enabled
+        if show_training_in_slider:
+            # Base layer (previous counts)
+            fig_overview.add_trace(go.Bar(
+                x=class_labels,
+                y=base_counts,
+                name='Previous Training Count',
+                marker_color='darkblue',
+                hovertemplate='Previous: %{y:,.0f}<extra></extra>'
+            ))
+
+            # Delta layer (new additions)
+            fig_overview.add_trace(go.Bar(
+                x=class_labels,
+                y=delta_counts,
+                name='New Additions',
+                marker_color='lightblue',
+                hovertemplate='Added: %{y:,.0f}<extra></extra>'
+            ))
+
+        # GT distribution (always shown)
+        fig_overview.add_trace(go.Bar(
+            x=class_labels,
+            y=gt_distribution,
+            name='GT Distribution',
+            marker_color='orange',
+            marker_pattern_shape='/' if show_training_in_slider else '',  # Pattern only when training data shown
+            opacity=0.8,
+            hovertemplate='GT: %{y:,.0f}<extra></extra>'
+        ))
+
+        # Update layout for overview chart
+        overview_title = "Data Distribution Overview"
+        if not show_training_in_slider:
+            overview_title += " (GT Only)"
+
+        fig_overview.update_layout(
+            title=overview_title,
+            barmode='stack',
+            height=200,  # Smaller height for overview
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="top",
+                y=-0.2,
+                xanchor="center",
+                x=0.5
+            ),
+            margin=dict(t=40, b=60)
+        )
+
+        fig_overview.update_xaxes(title_text="", tickangle=-45, tickfont=dict(size=8))
+        y_overview_title = "GT Count" if not show_training_in_slider else "Sample Count"
+        fig_overview.update_yaxes(title_text=y_overview_title)
+
+        st.plotly_chart(fig_overview, use_container_width=True)
     
     # Display summary metrics
     # Separate plates and chars statistics
