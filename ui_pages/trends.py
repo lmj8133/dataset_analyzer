@@ -799,6 +799,8 @@ def render_delta_counts(runs):
     - **Negative values** (red): Training samples removed
     - **Zero** (white): No change
     - **Note**: First run is not shown as there's no previous data to compare
+    - **Features**: Class selection, sorting, and dynamic color scale available
+    - **Sorting**: Plates always remain first if selected
     """)
     
     delta_data = []
@@ -820,20 +822,141 @@ def render_delta_counts(runs):
         plate_deltas.append(plate_delta)
         delta_runs.append(run['name'])
     
-    show_positive_only = st.checkbox("Show positive values only", value=False)
-    
-    # Add plates row first
-    heatmap_values = []
-    plate_row = []
-    for plate_delta in plate_deltas:
-        val = plate_delta
-        if show_positive_only and val <= 0:
-            val = 0
-        plate_row.append(val)
-    heatmap_values.append(plate_row)
+    # Add sorting option
+    st.divider()
+    sort_option = st.selectbox(
+        "Sort by",
+        options=[
+            "Default Order (0-9, A-Z)",
+            "Latest Delta (most recent run)",
+            "Total Delta (sum across all runs)",
+            "Absolute Change (largest magnitude)"
+        ],
+        index=0,
+        help="Note: Plates always remain first if selected.",
+        key="delta_sort_option"
+    )
 
-    # Add character rows
-    for cls_id in range(36):
+    # Add class selection UI
+    all_classes = ['Plates'] + [CLS_MAP[i] for i in range(36)]
+
+    # Initialize session state for delta counts checkboxes if not present
+    for cls in all_classes:
+        key = f"delta_class_check_{cls}"
+        if key not in st.session_state:
+            # Default to all selected except I and O
+            st.session_state[key] = False if cls in ['I', 'O'] else True
+
+    with st.expander("📊 Select classes to display", expanded=False):
+        # Control buttons and selection count
+        col_btn1, col_btn2, col_info = st.columns([1, 1, 3])
+        with col_btn1:
+            if st.button("Select All", use_container_width=True, key="delta_select_all_btn"):
+                for cls in all_classes:
+                    st.session_state[f"delta_class_check_{cls}"] = True
+                st.rerun()
+        with col_btn2:
+            if st.button("Clear All", use_container_width=True, key="delta_clear_all_btn"):
+                for cls in all_classes:
+                    st.session_state[f"delta_class_check_{cls}"] = False
+                st.rerun()
+        with col_info:
+            # Count selected classes
+            selected_count = sum(1 for cls in all_classes if st.session_state.get(f"delta_class_check_{cls}", False if cls in ['I', 'O'] else True))
+            st.info(f"📌 Selected: {selected_count}/{len(all_classes)} classes")
+
+        st.markdown("---")  # Divider line
+
+        # Row 1: Plates only
+        st.checkbox("🚗 **Plates**", key="delta_class_check_Plates")
+
+        # Row 2: Numbers 0-9
+        st.markdown("**Numbers:**")
+        num_cols = st.columns(10)
+        for i in range(10):
+            with num_cols[i]:
+                st.checkbox(str(i), key=f"delta_class_check_{i}")
+
+        # Row 3: Letters A-Z
+        st.markdown("**Letters:**")
+        # First row of letters: A-M (13 letters)
+        letter_cols1 = st.columns(13)
+        for i in range(13):
+            char_idx = i + 10  # A starts at index 10
+            with letter_cols1[i]:
+                st.checkbox(CLS_MAP[char_idx], key=f"delta_class_check_{CLS_MAP[char_idx]}")
+
+        # Second row of letters: N-Z (13 letters)
+        letter_cols2 = st.columns(13)
+        for i in range(13):
+            char_idx = i + 23  # N starts at index 23
+            if char_idx < 36:  # Make sure we don't exceed Z
+                with letter_cols2[i]:
+                    st.checkbox(CLS_MAP[char_idx], key=f"delta_class_check_{CLS_MAP[char_idx]}")
+
+    # Collect selected classes
+    selected_classes = []
+    if st.session_state.get("delta_class_check_Plates", True):
+        selected_classes.append("Plates")
+    selected_char_indices = []
+    for i in range(36):
+        cls_name = CLS_MAP[i]
+        default_selected = False if cls_name in ['I', 'O'] else True
+        if st.session_state.get(f"delta_class_check_{cls_name}", default_selected):
+            selected_classes.append(cls_name)
+            selected_char_indices.append(i)
+
+    # Sort selected character indices based on sort option
+    if delta_data and not sort_option.startswith("Default Order"):
+        if sort_option.startswith("Latest Delta"):
+            # Sort by latest run's delta (descending)
+            latest_delta = delta_data[-1]
+            selected_char_indices.sort(
+                key=lambda i: latest_delta.get(i, latest_delta.get(str(i), 0)),
+                reverse=True
+            )
+        elif sort_option.startswith("Total Delta"):
+            # Sort by sum of all deltas (descending)
+            selected_char_indices.sort(
+                key=lambda i: sum(d.get(i, d.get(str(i), 0)) for d in delta_data),
+                reverse=True
+            )
+        elif sort_option.startswith("Absolute Change"):
+            # Sort by absolute value of latest delta (descending)
+            latest_delta = delta_data[-1]
+            selected_char_indices.sort(
+                key=lambda i: abs(latest_delta.get(i, latest_delta.get(str(i), 0))),
+                reverse=True
+            )
+
+    if not selected_classes:
+        st.info("Please select at least one class to display.")
+        return
+
+    show_positive_only = st.checkbox("Show positive values only", value=False, key="delta_show_positive_only")
+    use_dynamic_scale = st.checkbox(
+        "Dynamic Color Scale",
+        value=False,
+        help="Adjust color scale based on actual data range for better contrast",
+        key="delta_dynamic_scale"
+    )
+    
+    # Add plates row first (if selected)
+    heatmap_values = []
+    y_labels = []
+
+    if 'Plates' in selected_classes:
+        plate_row = []
+        for plate_delta in plate_deltas:
+            val = plate_delta
+            if show_positive_only and val <= 0:
+                val = 0
+            plate_row.append(val)
+        heatmap_values.append(plate_row)
+        y_labels.append('Plates')
+
+    # Add character rows (only for selected classes)
+    for cls_id in selected_char_indices:
         row = []
         for delta in delta_data:
             # Handle both string and integer keys
@@ -842,24 +965,41 @@ def render_delta_counts(runs):
                 val = 0
             row.append(val)
         heatmap_values.append(row)
+        y_labels.append(CLS_MAP[cls_id])
     
-    # Create y-axis labels with plates first
-    y_labels = ['Plates'] + [CLS_MAP[i] for i in range(36)]
-    
+    # Calculate color scale parameters
+    if use_dynamic_scale and heatmap_values:
+        # Flatten all data to find min/max
+        all_values = [val for row in heatmap_values for val in row]
+        if all_values:
+            zmin = min(all_values)
+            zmax = max(all_values)
+        else:
+            zmin = None
+            zmax = None
+    else:
+        # Auto scale (Plotly default)
+        zmin = None
+        zmax = None
+
     fig_heatmap = go.Figure(data=go.Heatmap(
         z=heatmap_values,
         x=delta_runs,
         y=y_labels,
         colorscale='RdBu_r',
         zmid=0,
+        zmin=zmin,
+        zmax=zmax,
         text=[[str(int(val)) if val != 0 else '' for val in row] for row in heatmap_values],
         texttemplate='%{text}',
         textfont={"size": 10},
         colorbar=dict(title="Δ Count")
     ))
-    
+
+    # Update title with selected classes count
+    title_suffix = f" ({len(selected_classes)} selected)" if len(selected_classes) < 37 else ""
     fig_heatmap.update_layout(
-        title="Training Label Δ Counts Heatmap (Runs × Classes)",
+        title=f"Training Label Δ Counts Heatmap (Runs × Classes){title_suffix}",
         xaxis_title="Run Name",
         yaxis_title="Character",
         height=800
@@ -883,23 +1023,23 @@ def render_delta_counts(runs):
             delta = delta_data[selected_run_idx]
             plate_delta = plate_deltas[selected_run_idx]
 
-            # Create DataFrame with plates first, then characters
+            # Create DataFrame with plates first, then characters (following sort order)
             delta_items = []
 
-            # Add plate delta if non-zero
-            if plate_delta != 0:
+            # Add plate delta if non-zero and selected
+            if plate_delta != 0 and 'Plates' in selected_classes:
                 delta_items.append({'Character': 'Plates', 'Delta': plate_delta})
 
-            # Add character deltas if non-zero
-            for cls_id, count in delta.items():
-                if count != 0:
-                    char_name = CLS_MAP[int(cls_id) if isinstance(cls_id, str) else cls_id]
-                    delta_items.append({'Character': char_name, 'Delta': count})
-        
+            # Add character deltas in the same order as the sorted indices
+            for cls_id in selected_char_indices:
+                val = delta.get(cls_id, delta.get(str(cls_id), 0))
+                if val != 0:
+                    char_name = CLS_MAP[cls_id]
+                    delta_items.append({'Character': char_name, 'Delta': val})
+
         df_delta = pd.DataFrame(delta_items)
-        
+
         if not df_delta.empty:
-            df_delta = df_delta.sort_values('Delta', ascending=False)
             
             fig_bar = px.bar(
                 df_delta,
@@ -921,29 +1061,36 @@ def render_delta_counts(runs):
             
             st.plotly_chart(fig_bar, use_container_width=True)
             
-            # Separate plates and chars statistics
-            st.markdown("**🚗 Plates Statistics**")
-            plate_cols = st.columns(2)
+            # Separate plates and chars statistics (only for selected classes)
+            if 'Plates' in selected_classes:
+                st.markdown("**🚗 Plates Statistics**")
+                plate_cols = st.columns(2)
 
-            with plate_cols[0]:
-                plate_added = plate_delta if plate_delta > 0 else 0
-                st.metric("Plates Added", f"+{plate_added:,}")
+                with plate_cols[0]:
+                    plate_added = plate_delta if plate_delta > 0 else 0
+                    st.metric("Plates Added", f"+{plate_added:,}")
 
-            with plate_cols[1]:
-                plate_removed = plate_delta if plate_delta < 0 else 0
-                st.metric("Plates Removed", f"{plate_removed:,}")
+                with plate_cols[1]:
+                    plate_removed = plate_delta if plate_delta < 0 else 0
+                    st.metric("Plates Removed", f"{plate_removed:,}")
 
-            st.divider()
+                st.divider()
 
             st.markdown("**🔤 Character Statistics**")
             char_cols = st.columns(2)
 
             with char_cols[0]:
-                char_added = sum(v for v in delta.values() if v is not None and v > 0)
+                # Only count selected characters
+                char_added = sum(v for cls_id, v in delta.items()
+                               if v is not None and v > 0
+                               and CLS_MAP[int(cls_id) if isinstance(cls_id, str) else cls_id] in selected_classes)
                 st.metric("Chars Added", f"+{char_added:,}")
 
             with char_cols[1]:
-                char_removed = sum(v for v in delta.values() if v is not None and v < 0)
+                # Only count selected characters
+                char_removed = sum(v for cls_id, v in delta.items()
+                                 if v is not None and v < 0
+                                 and CLS_MAP[int(cls_id) if isinstance(cls_id, str) else cls_id] in selected_classes)
                 st.metric("Chars Removed", f"{char_removed:,}")
         else:
             st.info("No changes in this run compared to previous run.")
