@@ -82,13 +82,20 @@ def render_overall_trends(runs):
         
         if show_plate_accuracy:
             plate_accuracy_values = [run['metrics']['plate_accuracy'] * 100 for run in runs]
-            
+
             # Build custom hover text with plate info
             hover_texts = []
             for i, plate_acc in enumerate(plate_accuracy_values):
                 plates_total, plates_delta = plates_deltas[i]
-                
-                hover_text = f'Plate Accuracy: {plate_acc:.2f}%<br>'
+
+                # Calculate accuracy delta
+                if i > 0:
+                    prev_plate_acc = plate_accuracy_values[i - 1]
+                    acc_delta = plate_acc - prev_plate_acc
+                    hover_text = f'Plate Accuracy: {plate_acc:.2f}% ({acc_delta:+.2f}%)<br>'
+                else:
+                    hover_text = f'Plate Accuracy: {plate_acc:.2f}%<br>'
+
                 hover_text += f'車牌數: {plates_total:,}'
                 if plates_delta is not None:
                     hover_text += f' ({plates_delta:+,})'
@@ -107,13 +114,20 @@ def render_overall_trends(runs):
         
         if show_char_acc:
             char_acc_values = [run['metrics']['char_accuracy'] * 100 for run in runs]
-            
+
             # Build custom hover text with character info
             hover_texts = []
             for i, char_acc in enumerate(char_acc_values):
                 chars_total, chars_delta = chars_deltas[i]
-                
-                hover_text = f'Char Acc: {char_acc:.2f}%<br>'
+
+                # Calculate accuracy delta
+                if i > 0:
+                    prev_char_acc = char_acc_values[i - 1]
+                    acc_delta = char_acc - prev_char_acc
+                    hover_text = f'Char Acc: {char_acc:.2f}% ({acc_delta:+.2f}%)<br>'
+                else:
+                    hover_text = f'Char Acc: {char_acc:.2f}%<br>'
+
                 hover_text += f'字元數: {chars_total:,}'
                 if chars_delta is not None:
                     hover_text += f' ({chars_delta:+,})'
