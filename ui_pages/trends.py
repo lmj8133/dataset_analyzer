@@ -42,7 +42,7 @@ def render_overall_trends(runs):
         show_char_acc = st.checkbox("Show Char Accuracy", value=True)
         use_dynamic_yaxis = st.checkbox(
             "Dynamic Y-axis Scale",
-            value=False,
+            value=True,
             help="Adjust Y-axis range based on actual data for better contrast"
         )
 
@@ -270,9 +270,10 @@ def render_per_class_trends(runs):
     for cls in all_classes:
         key = f"class_check_{cls}"
         if key not in st.session_state:
-            st.session_state[key] = True  # Default to all selected
+            # Default to all selected except I and O
+            st.session_state[key] = False if cls in ['I', 'O'] else True
 
-    with st.expander("📊 Select classes to display", expanded=True):
+    with st.expander("📊 Select classes to display", expanded=False):
         # Control buttons and selection count
         col_btn1, col_btn2, col_info = st.columns([1, 1, 3])
         with col_btn1:
@@ -287,7 +288,7 @@ def render_per_class_trends(runs):
                 st.rerun()
         with col_info:
             # Count selected classes
-            selected_count = sum(1 for cls in all_classes if st.session_state.get(f"class_check_{cls}", True))
+            selected_count = sum(1 for cls in all_classes if st.session_state.get(f"class_check_{cls}", False if cls in ['I', 'O'] else True))
             st.info(f"📌 Selected: {selected_count}/{len(all_classes)} classes")
 
         st.markdown("---")  # Divider line
@@ -325,7 +326,8 @@ def render_per_class_trends(runs):
         selected_classes.append("Plates")
     for i in range(36):
         cls_name = CLS_MAP[i]
-        if st.session_state.get(f"class_check_{cls_name}", True):
+        default_selected = False if cls_name in ['I', 'O'] else True
+        if st.session_state.get(f"class_check_{cls_name}", default_selected):
             selected_classes.append(cls_name)
 
     if selected_run_idx is None or not selected_classes:
