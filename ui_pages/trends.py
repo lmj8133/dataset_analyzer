@@ -683,11 +683,11 @@ def render_per_class_trends(runs):
     with char_cols[2]:
         # Count accuracy changes for chars
         improved = sum(1 for curr, prev in zip(chars_accuracies, chars_prev_accuracies) if curr > prev)
-        st.metric("Classes Improved", improved, delta=f"↑ {improved}", delta_color="normal")
+        st.metric("Classes Improved", improved, delta=improved, delta_color="inverse")
 
     with char_cols[3]:
         declined = sum(1 for curr, prev in zip(chars_accuracies, chars_prev_accuracies) if curr < prev)
-        st.metric("Classes Declined", declined, delta=f"↓ {declined}", delta_color="inverse")
+        st.metric("Classes Declined", declined, delta=declined, delta_color="normal")
 
     with char_cols[4]:
         perfect_classes = sum(1 for acc in chars_accuracies if acc >= 95)
