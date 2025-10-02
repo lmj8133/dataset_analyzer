@@ -798,23 +798,26 @@ def render_delta_counts(runs):
     - **Positive values** (green): More training samples added
     - **Negative values** (red): Training samples removed
     - **Zero** (white): No change
+    - **Note**: First run is not shown as there's no previous data to compare
     """)
     
     delta_data = []
     plate_deltas = []
     delta_runs = []
-    
-    for i, run in enumerate(runs):
-        prev_counts = runs[i-1]['train_counts'] if i > 0 else None
+
+    # Skip first run since there's no previous data to compare
+    for i in range(1, len(runs)):
+        run = runs[i]
+        prev_counts = runs[i-1]['train_counts']
         delta = compute_delta_counts(run['train_counts'], prev_counts)
-        delta_data.append(delta)
-        
+
         # Calculate plate count delta (using training plates)
         n_plates = run.get('n_train_plates', 0)
-        prev_plates = runs[i-1].get('n_train_plates', 0) if i > 0 else 0
+        prev_plates = runs[i-1].get('n_train_plates', 0)
         plate_delta = n_plates - prev_plates
+
+        delta_data.append(delta)
         plate_deltas.append(plate_delta)
-        
         delta_runs.append(run['name'])
     
     show_positive_only = st.checkbox("Show positive values only", value=False)
@@ -828,7 +831,7 @@ def render_delta_counts(runs):
             val = 0
         plate_row.append(val)
     heatmap_values.append(plate_row)
-    
+
     # Add character rows
     for cls_id in range(36):
         row = []
@@ -867,29 +870,31 @@ def render_delta_counts(runs):
     st.divider()
     st.subheader("Single Run Δ Counts")
     
-    selected_run_idx = st.selectbox(
-        "Select run for bar chart",
-        options=list(range(len(runs))),
-        format_func=lambda x: runs[x]['name'],
-        index=len(runs)-1 if runs else 0
-    )
-    
-    if selected_run_idx is not None:
-        delta = delta_data[selected_run_idx]
-        plate_delta = plate_deltas[selected_run_idx]
-        
-        # Create DataFrame with plates first, then characters
-        delta_items = []
-        
-        # Add plate delta if non-zero
-        if plate_delta != 0:
-            delta_items.append({'Character': 'Plates', 'Delta': plate_delta})
-        
-        # Add character deltas if non-zero
-        for cls_id, count in delta.items():
-            if count != 0:
-                char_name = CLS_MAP[int(cls_id) if isinstance(cls_id, str) else cls_id]
-                delta_items.append({'Character': char_name, 'Delta': count})
+    # Adjust for skipping first run (delta_data starts from index 1 of runs)
+    if len(delta_data) > 0:
+        selected_run_idx = st.selectbox(
+            "Select run for bar chart",
+            options=list(range(len(delta_data))),
+            format_func=lambda x: runs[x+1]['name'],  # Offset by 1 since we skip first run
+            index=len(delta_data)-1 if delta_data else 0
+        )
+
+        if selected_run_idx is not None:
+            delta = delta_data[selected_run_idx]
+            plate_delta = plate_deltas[selected_run_idx]
+
+            # Create DataFrame with plates first, then characters
+            delta_items = []
+
+            # Add plate delta if non-zero
+            if plate_delta != 0:
+                delta_items.append({'Character': 'Plates', 'Delta': plate_delta})
+
+            # Add character deltas if non-zero
+            for cls_id, count in delta.items():
+                if count != 0:
+                    char_name = CLS_MAP[int(cls_id) if isinstance(cls_id, str) else cls_id]
+                    delta_items.append({'Character': char_name, 'Delta': count})
         
         df_delta = pd.DataFrame(delta_items)
         
@@ -903,7 +908,7 @@ def render_delta_counts(runs):
                 color='Delta',
                 color_continuous_scale='RdBu_r',
                 color_continuous_midpoint=0,
-                title=f"Δ Counts for {runs[selected_run_idx]['name']}",
+                title=f"Δ Counts for {runs[selected_run_idx+1]['name']}",
                 labels={'Delta': 'Count Change'},
                 height=400
             )
@@ -920,16 +925,18 @@ def render_delta_counts(runs):
             
             with col1:
                 # Include plate delta in total added calculation
-                total_added = sum(v for v in delta.values() if v > 0)
+                total_added = sum(v for v in delta.values() if v is not None and v > 0)
                 if plate_delta > 0:
                     total_added += plate_delta
                 st.metric("Total Added", f"+{total_added:,}")
             
             with col2:
                 # Include plate delta in total removed calculation
-                total_removed = sum(v for v in delta.values() if v < 0)
+                total_removed = sum(v for v in delta.values() if v is not None and v < 0)
                 if plate_delta < 0:
                     total_removed += plate_delta
                 st.metric("Total Removed", f"{total_removed:,}")
         else:
-            st.info("No changes in this run compared to baseline.")
+            st.info("No changes in this run compared to previous run.")
+    else:
+        st.info("📊 Need at least 2 runs to show delta counts.")
