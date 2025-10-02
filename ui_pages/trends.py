@@ -707,7 +707,10 @@ def render_per_class_trends(runs):
 
     with char_cols[4]:
         perfect_classes = sum(1 for acc in chars_accuracies if acc >= 95)
-        st.metric("Classes ≥95%", f"{perfect_classes}/{len(chars_accuracies)}")
+        prev_perfect_classes = sum(1 for acc in chars_prev_accuracies if acc >= 95) if prev_run else perfect_classes
+        delta_perfect = perfect_classes - prev_perfect_classes
+        st.metric("Classes ≥95%", f"{perfect_classes}/{len(chars_accuracies)}",
+                  delta=delta_perfect, delta_color="inverse")
 
     if show_gt_distribution:
         with char_cols[5]:
