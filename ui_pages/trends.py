@@ -795,12 +795,8 @@ def render_delta_counts(runs):
     
     st.markdown("""
     Shows the change in training label counts compared to the previous run.
-    - **Positive values** (green): More training samples added
-    - **Negative values** (red): Training samples removed
-    - **Zero** (white): No change
-    - **Note**: First run is not shown as there's no previous data to compare
-    - **Features**: Class selection, sorting, and dynamic color scale available
-    - **Sorting**: Plates always remain first if selected
+
+    **Note**: First run is not shown as there's no previous data to compare.
     """)
     
     delta_data = []
@@ -1012,12 +1008,23 @@ def render_delta_counts(runs):
     
     # Adjust for skipping first run (delta_data starts from index 1 of runs)
     if len(delta_data) > 0:
-        selected_run_idx = st.selectbox(
-            "Select run for bar chart",
-            options=list(range(len(delta_data))),
-            format_func=lambda x: runs[x+1]['name'],  # Offset by 1 since we skip first run
-            index=len(delta_data)-1 if delta_data else 0
-        )
+        col_select, col_scale = st.columns([3, 1])
+
+        with col_select:
+            selected_run_idx = st.selectbox(
+                "Select run for bar chart",
+                options=list(range(len(delta_data))),
+                format_func=lambda x: runs[x+1]['name'],  # Offset by 1 since we skip first run
+                index=len(delta_data)-1 if delta_data else 0
+            )
+
+        with col_scale:
+            use_dynamic_scale_bar = st.checkbox(
+                "Dynamic Color Scale",
+                value=False,
+                help="Adjust color scale based on actual data range for better contrast",
+                key="delta_bar_dynamic_scale"
+            )
 
         if selected_run_idx is not None:
             delta = delta_data[selected_run_idx]
@@ -1040,7 +1047,15 @@ def render_delta_counts(runs):
         df_delta = pd.DataFrame(delta_items)
 
         if not df_delta.empty:
-            
+            # Calculate color scale range
+            if use_dynamic_scale_bar:
+                delta_values = df_delta['Delta'].values
+                color_min = min(delta_values)
+                color_max = max(delta_values)
+            else:
+                color_min = None
+                color_max = None
+
             fig_bar = px.bar(
                 df_delta,
                 x='Character',
@@ -1048,6 +1063,7 @@ def render_delta_counts(runs):
                 color='Delta',
                 color_continuous_scale='RdBu_r',
                 color_continuous_midpoint=0,
+                range_color=[color_min, color_max] if use_dynamic_scale_bar else None,
                 title=f"Δ Counts for {runs[selected_run_idx+1]['name']}",
                 labels={'Delta': 'Count Change'},
                 height=400
