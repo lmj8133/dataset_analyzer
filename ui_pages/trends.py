@@ -921,21 +921,30 @@ def render_delta_counts(runs):
             
             st.plotly_chart(fig_bar, use_container_width=True)
             
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Include plate delta in total added calculation
-                total_added = sum(v for v in delta.values() if v is not None and v > 0)
-                if plate_delta > 0:
-                    total_added += plate_delta
-                st.metric("Total Added", f"+{total_added:,}")
-            
-            with col2:
-                # Include plate delta in total removed calculation
-                total_removed = sum(v for v in delta.values() if v is not None and v < 0)
-                if plate_delta < 0:
-                    total_removed += plate_delta
-                st.metric("Total Removed", f"{total_removed:,}")
+            # Separate plates and chars statistics
+            st.markdown("**🚗 Plates Statistics**")
+            plate_cols = st.columns(2)
+
+            with plate_cols[0]:
+                plate_added = plate_delta if plate_delta > 0 else 0
+                st.metric("Plates Added", f"+{plate_added:,}")
+
+            with plate_cols[1]:
+                plate_removed = plate_delta if plate_delta < 0 else 0
+                st.metric("Plates Removed", f"{plate_removed:,}")
+
+            st.divider()
+
+            st.markdown("**🔤 Character Statistics**")
+            char_cols = st.columns(2)
+
+            with char_cols[0]:
+                char_added = sum(v for v in delta.values() if v is not None and v > 0)
+                st.metric("Chars Added", f"+{char_added:,}")
+
+            with char_cols[1]:
+                char_removed = sum(v for v in delta.values() if v is not None and v < 0)
+                st.metric("Chars Removed", f"{char_removed:,}")
         else:
             st.info("No changes in this run compared to previous run.")
     else:
